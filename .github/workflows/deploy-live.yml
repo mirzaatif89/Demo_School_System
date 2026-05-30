@@ -69,10 +69,10 @@ jobs:
 
           if [ -n "${LIVE_SSH_PASSPHRASE:-}" ]; then
             askpass_file="$(mktemp)"
-            cat > "$askpass_file" <<'ASKPASS'
-#!/usr/bin/env bash
-printf '%s\n' "$LIVE_SSH_PASSPHRASE"
-ASKPASS
+            {
+              echo '#!/usr/bin/env bash'
+              echo 'printf "%s\n" "$LIVE_SSH_PASSPHRASE"'
+            } > "$askpass_file"
             chmod 700 "$askpass_file"
             DISPLAY=:0 SSH_ASKPASS="$askpass_file" SSH_ASKPASS_REQUIRE=force setsid ssh-add "$key_file" </dev/null
           else
