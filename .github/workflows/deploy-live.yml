@@ -1,4 +1,4 @@
-name: Deploy School CRM Live
+name: Deploy Live
 
 on:
   push:
@@ -7,31 +7,28 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: school-crm-live
+  group: deploy-live
   cancel-in-progress: true
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
-    env:
-      SSH_PORT: ${{ secrets.LIVE_PORT || '22' }}
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Validate required secrets
+      - name: Deploy via SSH
         shell: bash
         env:
           LIVE_HOST: ${{ secrets.LIVE_HOST }}
           LIVE_USER: ${{ secrets.LIVE_USER }}
+          LIVE_PORT: ${{ secrets.LIVE_PORT }}
           LIVE_SSH_KEY: ${{ secrets.LIVE_SSH_KEY }}
           LIVE_APP_PATH: ${{ secrets.LIVE_APP_PATH }}
+          DEPLOY_BRANCH: ${{ github.ref_name }}
         run: |
           set -euo pipefail
+
           missing=()
-          for name in LIVE_HOST LIVE_USER LIVE_SSH_KEY LIVE_APP_PATH; do
+          for name in LIVE_HOST LIVE_USER LIVE_PORT LIVE_SSH_KEY LIVE_APP_PATH; do
             if [ -z "${!name}" ]; then
               missing+=("$name")
             fi
@@ -42,115 +39,44 @@ jobs:
             exit 1
           fi
 
-      - name: Create deployment archive
-        shell: bash
-        run: |
-          set -euo pipefail
-          tar \
-            --exclude='.git' \
-            --exclude='.github' \
-            --exclude='.env' \
-            --exclude='node_modules' \
-            --exclude='logs' \
-            --exclude='uploads' \
-            --exclude='tmp' \
-            --exclude='deploy-ready/package' \
-            --exclude='deploy-ready/*.zip' \
-            -czf school-crm-release.tgz .
-
-      - name: Configure SSH
-        shell: bash
-        env:
-          LIVE_HOST: ${{ secrets.LIVE_HOST }}
-          LIVE_SSH_KEY: ${{ secrets.LIVE_SSH_KEY }}
-        run: |
-          set -euo pipefail
           mkdir -p ~/.ssh
-          printf '%s\n' "$LIVE_SSH_KEY" > ~/.ssh/live_deploy_key
-          chmod 600 ~/.ssh/live_deploy_key
-          ssh-keyscan -p "$SSH_PORT" "$LIVE_HOST" >> ~/.ssh/known_hosts
+          key_file="$(mktemp)"
+          printf '%s\n' "$LIVE_SSH_KEY" > "$key_file"
+          chmod 600 "$key_file"
 
-      - name: Upload release archive
-        shell: bash
-        env:
-          LIVE_HOST: ${{ secrets.LIVE_HOST }}
-          LIVE_USER: ${{ secrets.LIVE_USER }}
-        run: |
-          set -euo pipefail
-          scp -P "$SSH_PORT" -i ~/.ssh/live_deploy_key school-crm-release.tgz \
-            "$LIVE_USER@$LIVE_HOST:/tmp/school-crm-${GITHUB_SHA}.tgz"
-
-      - name: Deploy on live server
-        shell: bash
-        env:
-          LIVE_HOST: ${{ secrets.LIVE_HOST }}
-          LIVE_USER: ${{ secrets.LIVE_USER }}
-          LIVE_APP_PATH: ${{ secrets.LIVE_APP_PATH }}
-        run: |
-          set -euo pipefail
-          ssh -p "$SSH_PORT" -i ~/.ssh/live_deploy_key "$LIVE_USER@$LIVE_HOST" \
-            "APP_PATH='$LIVE_APP_PATH' RELEASE='/tmp/school-crm-${GITHUB_SHA}.tgz' bash -s" <<'REMOTE'
+          ssh -o StrictHostKeyChecking=no -i "$key_file" -p "$LIVE_PORT" "$LIVE_USER@$LIVE_HOST" \
+            "APP_PATH='$LIVE_APP_PATH' DEPLOY_BRANCH='$DEPLOY_BRANCH' bash -s" <<'REMOTE_SCRIPT'
           set -euo pipefail
 
-          if [ -z "${APP_PATH:-}" ]; then
-            echo "LIVE_APP_PATH is empty."
-            exit 1
-          fi
-
-          mkdir -p "$APP_PATH"
           cd "$APP_PATH"
 
-          if [ ! -f ".env" ]; then
-            echo "Missing $APP_PATH/.env on live server."
-            echo "Create it from .env.example and add production DB/SMTP credentials."
+          if [ -d .git ]; then
+            git fetch origin "$DEPLOY_BRANCH"
+            git reset --hard "origin/$DEPLOY_BRANCH"
+          else
+            echo "No Git repository found at $APP_PATH"
             exit 1
           fi
 
-          PRESERVE_DIR="$(mktemp -d)"
-          for item in .env admin_credentials.json permissions.json permissions-detailed.json date_sheet.json uploads logs; do
-            if [ -e "$item" ]; then
-              cp -a "$item" "$PRESERVE_DIR/"
-            fi
-          done
+          npm ci --omit=dev
 
-          find "$APP_PATH" -mindepth 1 -maxdepth 1 \
-            ! -name '.env' \
-            ! -name 'node_modules' \
-            ! -name 'admin_credentials.json' \
-            ! -name 'permissions.json' \
-            ! -name 'permissions-detailed.json' \
-            ! -name 'date_sheet.json' \
-            ! -name 'uploads' \
-            ! -name 'logs' \
-            -exec rm -rf {} +
-
-          tar -xzf "$RELEASE" -C "$APP_PATH"
-
-          for item in .env admin_credentials.json permissions.json permissions-detailed.json date_sheet.json uploads logs; do
-            if [ -e "$PRESERVE_DIR/$item" ]; then
-              rm -rf "$APP_PATH/$item"
-              cp -a "$PRESERVE_DIR/$item" "$APP_PATH/"
-            fi
-          done
-          rm -rf "$PRESERVE_DIR" "$RELEASE"
-
-          mkdir -p logs uploads
-
-          if [ -f package-lock.json ]; then
-            npm ci --omit=dev
-          else
-            npm install --omit=dev
+          if npm run | grep -qE '^[[:space:]]+build$'; then
+            npm run build
           fi
 
-          npm run validate
-
-          if command -v pm2 >/dev/null 2>&1; then
-            pm2 start ecosystem.config.js --update-env || pm2 restart school-crm --update-env
-            pm2 save
-          else
-            mkdir -p tmp
-            touch tmp/restart.txt
+          if ! command -v pm2 >/dev/null 2>&1; then
+            echo "pm2 is not installed on the server."
+            exit 1
           fi
 
+          if pm2 describe school-crm >/dev/null 2>&1; then
+            pm2 restart ecosystem.config.js --update-env
+          else
+            pm2 start ecosystem.config.js --update-env
+          fi
+
+          pm2 save
           echo "Deployment completed."
-REMOTE
+          REMOTE_SCRIPT
+
+          rm -f "$key_file"
