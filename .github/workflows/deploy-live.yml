@@ -65,24 +65,26 @@ jobs:
           printf '%s\n' "$LIVE_SSH_KEY" > "$key_file"
           chmod 600 "$key_file"
 
+          eval "$(ssh-agent -s)"
+
           if [ -n "${LIVE_SSH_PASSPHRASE:-}" ]; then
             askpass_file="$(mktemp)"
             cat > "$askpass_file" <<'ASKPASS'
-          #!/usr/bin/env bash
-          printf '%s\n' "$LIVE_SSH_PASSPHRASE"
-          ASKPASS
+#!/usr/bin/env bash
+printf '%s\n' "$LIVE_SSH_PASSPHRASE"
+ASKPASS
             chmod 700 "$askpass_file"
-            export SSH_ASKPASS="$askpass_file"
-            export SSH_ASKPASS_REQUIRE=force
-            export DISPLAY=:0
+            DISPLAY=:0 SSH_ASKPASS="$askpass_file" SSH_ASKPASS_REQUIRE=force setsid ssh-add "$key_file" </dev/null
+          else
+            ssh-add "$key_file"
           fi
 
           remote_release="/tmp/school-crm-${GITHUB_SHA}.tgz"
 
-          scp -o StrictHostKeyChecking=no -i "$key_file" -P "$LIVE_PORT" release.tgz \
+          scp -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=30 -o StrictHostKeyChecking=no -P "$LIVE_PORT" release.tgz \
             "$LIVE_USER@$LIVE_HOST:$remote_release"
 
-          ssh -o StrictHostKeyChecking=no -i "$key_file" -p "$LIVE_PORT" "$LIVE_USER@$LIVE_HOST" \
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=30 -o StrictHostKeyChecking=no -p "$LIVE_PORT" "$LIVE_USER@$LIVE_HOST" \
             "APP_PATH='$LIVE_APP_PATH' RELEASE='$remote_release' bash -s" <<'REMOTE_SCRIPT'
           set -euo pipefail
 
@@ -151,3 +153,4 @@ jobs:
           if [ -n "${askpass_file:-}" ]; then
             rm -f "$askpass_file"
           fi
+          ssh-agent -k
