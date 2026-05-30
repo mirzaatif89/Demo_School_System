@@ -22,6 +22,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          release_file="$RUNNER_TEMP/release.tgz"
           tar \
             --exclude='.git' \
             --exclude='.github' \
@@ -32,7 +33,8 @@ jobs:
             --exclude='tmp' \
             --exclude='deploy-ready/package' \
             --exclude='deploy-ready/*.zip' \
-            -czf release.tgz .
+            -czf "$release_file" .
+          cp "$release_file" release.tgz
 
       - name: Deploy via SSH
         shell: bash
