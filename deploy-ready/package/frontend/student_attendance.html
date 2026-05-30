@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Attendance - Apexiueum</title>
+    <link rel="stylesheet" href="style.css?v=20260520-login-apexiums-brand">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .header { margin-bottom: 0.9rem; }
+        .header h1 { font-size: 1.5rem; }
+        .header p { font-size: 0.95rem; }
+        .attendance-toolbar { display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)) minmax(240px, 320px); gap: 0.8rem; margin-bottom: 1rem; align-items: end; }
+        .attendance-toolbar .search-bar { max-width: 273px; min-height: 38px; }
+        .attendance-filter { width: 100%; background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.65rem 0.8rem; box-shadow: var(--shadow-sm); }
+        .attendance-filter label { display:block; margin-bottom:0.3rem; font-size:0.8rem; font-weight:600; color:var(--text-secondary); }
+        .attendance-filter input,
+        .attendance-filter select { width:100%; min-height:38px; padding:0.5rem 0.7rem; border:1px solid var(--border-color); border-radius:8px; background:#fff; }
+        .attendance-chip { display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.45rem 0.8rem; border-radius: 999px; font-size: 0.82rem; font-weight: 700; }
+        .chip-present { background: #dcfce7; color: #166534; }
+        .chip-absent { background: #fee2e2; color: #991b1b; }
+        .chip-late { background: #fef3c7; color: #92400e; }
+        .chip-leave { background: #dbeafe; color: #1d4ed8; }
+        .chip-empty { background: #e2e8f0; color: #475569; }
+        .attendance-actions { display: flex; gap: 0.35rem; justify-content: flex-end; flex-wrap: nowrap; }
+        .dashboard-container .attendance-actions .btn {
+            min-height: 32px;
+            padding: 0.28rem 0.58rem;
+            font-size: 0.78rem;
+            line-height: 1;
+            white-space: nowrap;
+        }
+        .attendance-empty { text-align: center; color: var(--text-secondary); padding: 1.25rem; }
+        @media (max-width: 720px) {
+            .attendance-toolbar { grid-template-columns: 1fr; }
+            .attendance-toolbar .search-bar { max-width: 100%; justify-self: stretch; }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <aside class="sidebar">
+            <div class="logo-section">
+                <img class="sidebar-logo-img" src="images/logo.png" alt="Apexiums School System logo">
+            </div>
+            <nav class="nav-links">
+                <a href="dashboard.html" class="nav-item"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></a>
+                <a href="students.html" class="nav-item"><i data-lucide="users"></i><span>Students</span></a>
+                <a href="teachers.html" class="nav-item"><i data-lucide="book-open"></i><span>Teachers</span></a>
+                <a href="staff.html" class="nav-item"><i data-lucide="briefcase"></i><span>Staff</span></a>
+                <a href="classes.html" class="nav-item"><i data-lucide="school"></i><span>Classes</span></a>
+                <a href="fees.html" class="nav-item"><i data-lucide="credit-card"></i><span>Fees</span></a>
+                <a href="fee_challan.html" class="nav-item"><i data-lucide="file-text"></i><span>Fee Challan</span></a>
+                <a href="teacher_salaries.html" class="nav-item"><i data-lucide="wallet"></i><span>Salaries</span></a>
+                <a href="exams.html" class="nav-item"><i data-lucide="clipboard-list"></i><span>Exams</span></a>
+                <a href="revenue.html" class="nav-item"><i data-lucide="trending-up"></i><span>Revenue</span></a>
+                <a href="permissions.html" class="nav-item"><i data-lucide="shield"></i><span>Permissions</span></a>
+                <a href="aboutme.html" class="nav-item"><i data-lucide="info"></i><span>About Us</span></a>
+                <a href="#" class="nav-item" onclick="logoutUser(event)"><i data-lucide="log-out"></i><span>Logout</span></a>
+            </nav>
+            <a href="settings.html" class="user-profile"><div class="avatar">AD</div><div class="user-info"><h4>Admin User</h4><p>Principal</p></div></a>
+        </aside>
+        <main class="main-content">
+            <header class="header">
+                <div>
+                    <h1>Student Attendance</h1>
+                    <p style="color: var(--text-secondary); margin-top: 0.25rem;">Select date, campus, and class first. Students will show class wise for attendance.</p>
+                </div>
+            </header>
+            <div class="attendance-toolbar">
+                <div class="attendance-filter">
+                    <label for="studentAttendanceDate">Attendance Date</label>
+                    <input type="date" id="studentAttendanceDate">
+                </div>
+                <div class="attendance-filter">
+                    <label for="studentAttendanceCampus">Campus</label>
+                    <select id="studentAttendanceCampus">
+                        <option value="">Select Campus</option>
+                    </select>
+                </div>
+                <div class="attendance-filter">
+                    <label for="studentAttendanceClass">Class</label>
+                    <select id="studentAttendanceClass">
+                        <option value="">Select Class</option>
+                    </select>
+                </div>
+                <div class="search-bar">
+                    <i data-lucide="search" size="18" style="color: var(--text-secondary);"></i>
+                    <input type="text" id="studentAttendanceSearch" placeholder="Search students...">
+                </div>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead><tr><th>Student</th><th>Class</th><th>Campus</th><th>Selected Date Status</th><th style="text-align:right;">Actions</th></tr></thead>
+                    <tbody id="studentAttendanceTableBody"></tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+    <script src="auth.js?v=20260520-sidebar-requested-order"></script>
+    <script src="script.js?v=20260520-sidebar-classes-restore"></script>
+    <script>
+        const STORAGE_KEY_STUDENT_ATTENDANCE = 'eduCore_student_attendance';
+        document.addEventListener('DOMContentLoaded', async () => {
+            document.getElementById('studentAttendanceDate').value = new Date().toISOString().slice(0, 10);
+            await loadStudentAttendanceFromSQL();
+            populateStudentAttendanceFilters();
+            renderStudentAttendancePage();
+            document.getElementById('studentAttendanceSearch').addEventListener('input', renderStudentAttendancePage);
+            document.getElementById('studentAttendanceDate').addEventListener('change', async () => {
+                await loadStudentAttendanceFromSQL();
+                renderStudentAttendancePage();
+            });
+            document.getElementById('studentAttendanceCampus').addEventListener('change', () => {
+                populateStudentAttendanceClassFilter();
+                renderStudentAttendancePage();
+            });
+            document.getElementById('studentAttendanceClass').addEventListener('change', renderStudentAttendancePage);
+            if (window.lucide) window.lucide.createIcons();
+        });
+        function getStudentAttendanceStore() { return JSON.parse(localStorage.getItem(STORAGE_KEY_STUDENT_ATTENDANCE) || '{}'); }
+        function saveStudentAttendanceStore(store) { localStorage.setItem(STORAGE_KEY_STUDENT_ATTENDANCE, JSON.stringify(store)); }
+        function getSelectedStudentDateKey() { return document.getElementById('studentAttendanceDate').value || new Date().toISOString().slice(0, 10); }
+        function normalizeAttendanceFilterValue(value) { return String(value || '').trim().toLowerCase(); }
+        function getStudentAttendanceStudents() { return Array.isArray(getData(STORAGE_KEY_STUDENTS)) ? getData(STORAGE_KEY_STUDENTS) : []; }
+        function addAttendanceSelectOption(select, value, label = value) {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = label;
+            select.appendChild(option);
+        }
+        function populateStudentAttendanceFilters() {
+            const campusSelect = document.getElementById('studentAttendanceCampus');
+            const loggedInUser = typeof getLoggedInUser === 'function' ? getLoggedInUser() : null;
+            const students = getStudentAttendanceStudents();
+            const campusMap = new Map();
+
+            students.forEach((student) => {
+                const campusName = String(student.campusName || 'Main Campus').trim();
+                if (!campusName) return;
+                const key = normalizeAttendanceFilterValue(campusName);
+                if (!campusMap.has(key)) campusMap.set(key, campusName);
+            });
+
+            if (loggedInUser?.role === 'Branch' && loggedInUser.campusName) {
+                campusMap.clear();
+                campusMap.set(normalizeAttendanceFilterValue(loggedInUser.campusName), loggedInUser.campusName);
+                campusSelect.disabled = true;
+            }
+
+            const campuses = Array.from(campusMap.values()).sort((a, b) => a.localeCompare(b));
+            campusSelect.innerHTML = '<option value="">Select Campus</option>';
+            campuses.forEach((campusName) => addAttendanceSelectOption(campusSelect, campusName));
+            if (campuses.length === 1) campusSelect.value = campuses[0];
+            populateStudentAttendanceClassFilter();
+        }
+        function populateStudentAttendanceClassFilter() {
+            const classSelect = document.getElementById('studentAttendanceClass');
+            const selectedCampus = document.getElementById('studentAttendanceCampus').value;
+            const previousValue = classSelect.value;
+            const classMap = new Map();
+            const students = getStudentAttendanceStudents();
+
+            students
+                .filter((student) => !selectedCampus || normalizeAttendanceFilterValue(student.campusName || 'Main Campus') === normalizeAttendanceFilterValue(selectedCampus))
+                .forEach((student) => {
+                    const className = String(student.classGrade || '').trim();
+                    if (!className) return;
+                    const key = normalizeAttendanceFilterValue(className);
+                    if (!classMap.has(key)) classMap.set(key, className);
+                });
+
+            if (!selectedCampus) {
+                getData(STORAGE_KEY_CLASSES).forEach((item) => {
+                    const className = String(item?.name || '').trim();
+                    if (!className) return;
+                    const key = normalizeAttendanceFilterValue(className);
+                    if (!classMap.has(key)) classMap.set(key, className);
+                });
+            }
+
+            const classes = Array.from(classMap.values()).sort((a, b) => {
+                if (typeof compareStudentClassNames === 'function') return compareStudentClassNames(a, b);
+                return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+            });
+
+            classSelect.innerHTML = '<option value="">Select Class</option>';
+            classes.forEach((className) => addAttendanceSelectOption(classSelect, className, typeof getStudentQuickFilterClassLabel === 'function' ? getStudentQuickFilterClassLabel(className) : className));
+            if (previousValue && classes.some((className) => normalizeAttendanceFilterValue(className) === normalizeAttendanceFilterValue(previousValue))) {
+                classSelect.value = previousValue;
+            } else {
+                classSelect.value = '';
+            }
+        }
+        function getStudentStatusForDate(studentId, dateKey) {
+            const records = Array.isArray(getStudentAttendanceStore()[studentId]) ? getStudentAttendanceStore()[studentId] : [];
+            const record = records.find(item => item.date === dateKey);
+            return record ? record.status : 'Not Marked';
+        }
+        async function setStudentAttendance(studentId, status) {
+            const dateKey = getSelectedStudentDateKey();
+            const store = getStudentAttendanceStore();
+            const records = Array.isArray(store[studentId]) ? store[studentId] : [];
+            store[studentId] = records.filter(item => item.date !== dateKey).concat({ date: dateKey, status });
+            saveStudentAttendanceStore(store);
+            const syncResult = await saveStudentAttendanceToSQLRecord(studentId, dateKey, status);
+            if (!syncResult.success) {
+                alert(syncResult.error || 'Student attendance could not be saved to the database.');
+            }
+            if (status === 'Leave' && typeof approveMatchingLeaveRequestFromAttendance === 'function') {
+                await approveMatchingLeaveRequestFromAttendance('Student', studentId, dateKey);
+            }
+            renderStudentAttendancePage();
+        }
+        function renderStudentAttendancePage() {
+            const tbody = document.getElementById('studentAttendanceTableBody');
+            const term = document.getElementById('studentAttendanceSearch').value.trim().toLowerCase();
+            const dateKey = getSelectedStudentDateKey();
+            const selectedCampus = document.getElementById('studentAttendanceCampus').value;
+            const selectedClass = document.getElementById('studentAttendanceClass').value;
+            tbody.innerHTML = '';
+
+            if (!dateKey || !selectedCampus || !selectedClass) {
+                tbody.innerHTML = '<tr><td colspan="5" class="attendance-empty">Please select date, campus, and class to show students for attendance.</td></tr>';
+                return;
+            }
+
+            const students = getStudentAttendanceStudents().filter(student => {
+                const campusName = student.campusName || 'Main Campus';
+                return normalizeAttendanceFilterValue(campusName) === normalizeAttendanceFilterValue(selectedCampus) &&
+                    normalizeAttendanceFilterValue(student.classGrade) === normalizeAttendanceFilterValue(selectedClass) &&
+                    (`${student.fullName || ''} ${student.classGrade || ''} ${campusName}`).toLowerCase().includes(term);
+            });
+
+            if (!students.length) {
+                tbody.innerHTML = '<tr><td colspan="5" class="attendance-empty">No students found for the selected campus and class.</td></tr>';
+                return;
+            }
+
+            students.forEach(student => {
+                const status = getStudentStatusForDate(student.id, dateKey);
+                const statusClass = status === 'Present' ? 'chip-present' : status === 'Absent' ? 'chip-absent' : status === 'Late' ? 'chip-late' : status === 'Leave' ? 'chip-leave' : 'chip-empty';
+                const studentIdArg = escapeHtml(JSON.stringify(String(student.id || '')));
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${escapeHtml(student.fullName || '-')}</td>
+                    <td>${escapeHtml(student.classGrade || '-')}</td>
+                    <td>${escapeHtml(student.campusName || 'Main Campus')}</td>
+                    <td><span class="attendance-chip ${statusClass}">${status}</span></td>
+                    <td><div class="attendance-actions">
+                        <button class="btn btn-outline" onclick="setStudentAttendance(${studentIdArg}, 'Present')">Present</button>
+                        <button class="btn btn-outline" onclick="setStudentAttendance(${studentIdArg}, 'Late')">Late</button>
+                        <button class="btn btn-outline" onclick="setStudentAttendance(${studentIdArg}, 'Leave')">Leave</button>
+                        <button class="btn btn-outline" onclick="setStudentAttendance(${studentIdArg}, 'Absent')">Absent</button>
+                    </div></td>`;
+                tbody.appendChild(tr);
+            });
+        }
+    </script>
+</body>
+</html>
