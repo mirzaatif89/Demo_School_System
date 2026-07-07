@@ -135,6 +135,8 @@
         'set_fee.html': { moduleKey: 'fees', defaultHome: 'dashboard.html', label: 'Set Fees', icon: 'badge-dollar-sign' },
         'fees.html': { moduleKey: 'fees', defaultHome: 'dashboard.html', label: 'Fees', icon: 'credit-card' },
         'fee_challan.html': { moduleKey: 'fee_challan', defaultHome: 'dashboard.html', label: 'Fee Challan', icon: 'file-text' },
+        'remaining_charges.html': { moduleKey: 'fees', defaultHome: 'dashboard.html', label: 'Remaining Charges', icon: 'circle-dollar-sign' },
+        'payment_history.html': { moduleKey: 'fees', defaultHome: 'dashboard.html', label: 'Payment Statement', icon: 'receipt-text' },
         'fee_logos.html': { moduleKey: 'fees', defaultHome: 'dashboard.html', label: 'Logos', icon: 'image' },
         'bills.html': { moduleKey: 'bills', defaultHome: 'dashboard.html', label: 'Bills', icon: 'receipt' },
         'library.html': { moduleKey: 'library', defaultHome: 'dashboard.html', label: 'Library', icon: 'library' },
@@ -448,6 +450,84 @@
         callback();
     }
 
+    const WELCOME_SESSION_KEY = 'eduCore_welcome_payload';
+
+    function escapeWelcomeText(value) {
+        return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        }[char]));
+    }
+
+    function getWelcomeSchoolName() {
+        try {
+            const settings = JSON.parse(localStorage.getItem('eduCore_settings') || '{}') || {};
+            return String(settings.schoolName || settings.schoolTitle || 'Apexiums School System').trim() || 'Apexiums School System';
+        } catch (_error) {
+            return 'Apexiums School System';
+        }
+    }
+
+    function showWelcomeAnimationIfNeeded() {
+        if (document.getElementById('loginForm')) return;
+        if (!sessionStorage.getItem('eduCore_token')) return;
+
+        let payload = null;
+        try {
+            payload = JSON.parse(sessionStorage.getItem(WELCOME_SESSION_KEY) || 'null');
+        } catch (_error) {
+            payload = null;
+        }
+
+        if (!payload || !payload.at) return;
+        if (Date.now() - Number(payload.at) > 5 * 60 * 1000) {
+            sessionStorage.removeItem(WELCOME_SESSION_KEY);
+            return;
+        }
+
+        sessionStorage.removeItem(WELCOME_SESSION_KEY);
+        if (document.getElementById('eduWelcomeOverlay')) return;
+
+        const displayName = String(payload.displayName || loggedInUser?.fullName || loggedInUser?.username || 'User').trim() || 'User';
+        const schoolName = String(payload.schoolName || getWelcomeSchoolName()).trim() || 'Apexiums School System';
+        const logoSrc = 'images/logo.png';
+        const overlay = document.createElement('div');
+        overlay.id = 'eduWelcomeOverlay';
+        overlay.className = 'edu-welcome-overlay';
+        overlay.setAttribute('role', 'dialog');
+        overlay.setAttribute('aria-modal', 'true');
+        overlay.innerHTML = `
+            <div class="edu-welcome-card">
+                <div class="edu-welcome-glow" aria-hidden="true"></div>
+                <div class="edu-welcome-icon edu-welcome-logo-wrap">
+                    <img class="edu-welcome-logo" src="${escapeWelcomeText(logoSrc)}" alt="${escapeWelcomeText(schoolName)} logo">
+                </div>
+                <h2 class="edu-welcome-title">Welcome, ${escapeWelcomeText(displayName)}</h2>
+                <p class="edu-welcome-subtitle">Welcome ${escapeWelcomeText(displayName)} in ${escapeWelcomeText(schoolName)}.</p>
+                <div class="edu-welcome-divider" aria-hidden="true"></div>
+                <button type="button" class="edu-welcome-skip">Get Started</button>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+
+        const close = () => {
+            if (!overlay.classList.contains('active')) return;
+            overlay.classList.add('closing');
+            window.setTimeout(() => overlay.remove(), 240);
+        };
+
+        overlay.addEventListener('click', (event) => {
+            if (event.target === overlay) close();
+        });
+        overlay.querySelector('.edu-welcome-skip')?.addEventListener('click', close);
+        overlay.classList.add('active');
+        window.setTimeout(close, 2400);
+    }
+
     function getHomePage(user, permissions) {
         const group = getGroupConfig(user, permissions);
         const registryEntry = pageRegistry[currentPage];
@@ -604,7 +684,6 @@
             const navItems = [
                 { type: 'link', page: 'dashboard.html', label: 'Dashboard', icon: 'layout-dashboard' },
                 { type: 'link', page: 'banners.html', label: 'Banners', icon: 'image' },
-                { type: 'link', page: 'fee_logos.html', label: 'Logos', icon: 'image' },
                 { type: 'link', page: 'classes.html', label: 'Classes', icon: 'school' },
                 { type: 'link', page: 'students.html', label: 'Students', icon: 'users' },
                 { type: 'link', page: 'student_scheduling.html', label: 'Students Scheduling', icon: 'calendar-clock' },
@@ -630,6 +709,8 @@
                         { page: 'set_fee.html', label: 'Set Fees', icon: 'badge-dollar-sign' },
                         { page: 'fees.html', label: 'Fees', icon: 'credit-card' },
                         { page: 'fee_challan.html', label: 'Fee Challan', icon: 'file-text' },
+                        { page: 'remaining_charges.html', label: 'Remaining Charges', icon: 'circle-dollar-sign' },
+                        { page: 'payment_history.html', label: 'Payment Statement', icon: 'receipt-text' },
                         { page: 'annual_charges.html', label: 'Annual Charges', icon: 'receipt' }
                     ]
                 },
@@ -1215,9 +1296,11 @@
 
         if (!canAccessPage(loggedInUser, permissions, currentPage)) {
             redirectToAllowedHome(loggedInUser, permissions);
+            return;
         }
 
         startActiveSessionTracking();
+        runWhenReady(showWelcomeAnimationIfNeeded);
     })();
 })();
 

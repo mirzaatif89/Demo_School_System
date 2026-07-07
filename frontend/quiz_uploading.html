@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quiz Uploading - Apexiums School System</title>
-    <link rel="stylesheet" href="style.css?v=20260520-login-apexiums-brand">
+    <link rel="stylesheet" href="style.css?v=20260708-apexiums-brand">
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         .upload-panel { background:#fff; border:1px solid #cfe8e5; border-radius:16px; padding:1.35rem; margin-bottom:1.5rem; box-shadow:0 12px 30px rgba(15,23,42,.07); }
@@ -22,6 +22,19 @@
         .mini-btn { min-height:34px; border:0; border-radius:8px; padding:.45rem .7rem; font-weight:800; cursor:pointer; display:inline-flex; align-items:center; gap:.35rem; }
         .mini-btn.edit { background:#dbeafe; color:#1d4ed8; }
         .mini-btn.delete { background:#fee2e2; color:#b91c1c; }
+        .mini-btn.add { background:#ccfbf1; color:#0f766e; }
+        .quiz-builder { margin-top:1rem; border:1px dashed #99d9d2; border-radius:14px; padding:1rem; background:#f8fffe; }
+        .quiz-builder-head { display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap; margin-bottom:.85rem; }
+        .quiz-builder-head h3 { margin:0; color:#0f4f4a; }
+        .quiz-question-card { border:1px solid #d9ece9; border-radius:12px; background:#fff; padding:1rem; margin-bottom:.85rem; }
+        .quiz-question-top { display:grid; grid-template-columns:minmax(240px,1fr) 120px 150px auto; gap:.75rem; align-items:end; }
+        .quiz-options-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:.75rem; margin-top:.85rem; }
+        .question-empty { margin:0; color:#64748b; font-size:.9rem; }
+        .result-pass { display:inline-flex; border-radius:999px; padding:.25rem .6rem; background:#dcfce7; color:#166534; font-weight:800; }
+        .result-fail { display:inline-flex; border-radius:999px; padding:.25rem .6rem; background:#fee2e2; color:#991b1b; font-weight:800; }
+        @media (max-width: 760px) {
+            .quiz-question-top { grid-template-columns:1fr; }
+        }
     </style>
 </head>
 
@@ -45,10 +58,21 @@
                         <div><label>Class</label><select id="quizClass" required></select></div>
                         <div><label>Quiz Title</label><input type="text" id="quizTitle" required placeholder="e.g. Algebra Quiz"></div>
                         <div><label>Total Marks</label><input type="number" id="quizTotalMarks" min="1" required placeholder="e.g. 20"></div>
+                        <div><label>Pass Marks</label><input type="number" id="quizPassMarks" min="1" placeholder="e.g. 10"></div>
                         <div><label>Due Date</label><input type="date" id="quizDueDate"></div>
-                        <div><label>Attach Quiz File</label><input type="file" id="quizFile" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.txt"></div>
+                        <div><label>Attach Quiz File (Optional)</label><input type="file" id="quizFile" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.txt"></div>
                     </div>
-                    <div style="margin-top:1rem;"><label>Quiz Instructions</label><textarea id="quizDetails" required placeholder="Write quiz instructions, marks, syllabus, or links"></textarea></div>
+                    <div style="margin-top:1rem;"><label>Quiz Instructions</label><textarea id="quizDetails" required placeholder="Write quiz instructions, syllabus, or links"></textarea></div>
+                    <div class="quiz-builder">
+                        <div class="quiz-builder-head">
+                            <div>
+                                <h3>Option Based Questions</h3>
+                                <p class="question-empty">Add MCQ questions so students can select right/wrong options in their portal.</p>
+                            </div>
+                            <button type="button" class="mini-btn add" onclick="addQuestion()"><i data-lucide="plus" width="14"></i> Add Question</button>
+                        </div>
+                        <div id="quizQuestionBuilder"></div>
+                    </div>
                     <button type="submit" class="btn btn-primary" id="quizSaveBtn" style="margin-top:1rem;"><i data-lucide="save"></i> Save Quiz</button>
                 </form>
             </section>
@@ -61,58 +85,183 @@
     <script>
         const QUIZ_KEY = 'eduCore_student_quizzes';
         const QUIZ_SUBMISSION_KEY = 'eduCore_student_quiz_submissions';
+        let questionDrafts = [];
+
         function data(key) { try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch (_e) { return []; } }
         function save(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); return true; } catch (_e) { showAppAlert('File/data is too large to save.', 'Storage Full'); return false; } }
         function esc(value) { return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[char])); }
+
         function populateClasses() {
             const students = data('eduCore_students');
             const classes = data('eduCore_classes');
             const names = [...new Set([...classes.map((item) => item?.section ? `${item.name} (${item.section})` : item?.name), ...students.map((student) => student?.classGrade)].map((value) => String(value || '').trim()).filter(Boolean))].sort();
             quizClass.innerHTML = '<option value="">Select Class</option>' + names.map((name) => `<option value="${esc(name)}">${esc(name)}</option>`).join('');
         }
+
         function readFile(input) {
             const file = input.files?.[0];
             if (!file) return Promise.resolve(null);
             return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve({ name: file.name, dataUrl: reader.result, type: file.type || '' }); reader.onerror = reject; reader.readAsDataURL(file); });
         }
+
+        function getQuestionDraftsFromDom() {
+            return Array.from(document.querySelectorAll('[data-question-card]')).map((card) => ({
+                text: card.querySelector('[data-question-text]')?.value.trim() || '',
+                marks: Math.max(1, Number(card.querySelector('[data-question-marks]')?.value || 1)),
+                correctIndex: Math.max(0, Number(card.querySelector('[data-question-correct]')?.value || 0)),
+                options: Array.from(card.querySelectorAll('[data-question-option]')).map((input) => input.value.trim())
+            }));
+        }
+
+        function renderQuestionBuilder() {
+            if (!questionDrafts.length) {
+                quizQuestionBuilder.innerHTML = '<div class="empty-note">No option questions added yet. Add questions for auto-marking in student portal.</div>';
+                if (window.lucide) lucide.createIcons();
+                return;
+            }
+
+            quizQuestionBuilder.innerHTML = questionDrafts.map((question, index) => {
+                const options = Array.isArray(question.options) && question.options.length ? question.options : ['', '', '', ''];
+                const paddedOptions = [...options, '', '', '', ''].slice(0, 4);
+                return `
+                    <div class="quiz-question-card" data-question-card data-question-index="${index}">
+                        <div class="quiz-question-top">
+                            <div>
+                                <label>Question ${index + 1}</label>
+                                <input type="text" data-question-text value="${esc(question.text)}" placeholder="Write question">
+                            </div>
+                            <div>
+                                <label>Marks</label>
+                                <input type="number" data-question-marks min="1" value="${esc(question.marks || 1)}">
+                            </div>
+                            <div>
+                                <label>Right Option</label>
+                                <select data-question-correct>
+                                    ${paddedOptions.map((_option, optionIndex) => `<option value="${optionIndex}" ${Number(question.correctIndex || 0) === optionIndex ? 'selected' : ''}>Option ${optionIndex + 1}</option>`).join('')}
+                                </select>
+                            </div>
+                            <button type="button" class="mini-btn delete" onclick="removeQuestion(${index})"><i data-lucide="trash-2" width="14"></i> Remove</button>
+                        </div>
+                        <div class="quiz-options-grid">
+                            ${paddedOptions.map((option, optionIndex) => `
+                                <div>
+                                    <label>Option ${optionIndex + 1}</label>
+                                    <input type="text" data-question-option value="${esc(option)}" placeholder="Option ${optionIndex + 1}">
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function syncQuestionDrafts() {
+            questionDrafts = getQuestionDraftsFromDom();
+        }
+
+        function addQuestion(question = null) {
+            syncQuestionDrafts();
+            questionDrafts.push(question || { text: '', marks: 1, correctIndex: 0, options: ['', '', '', ''] });
+            renderQuestionBuilder();
+        }
+
+        function removeQuestion(index) {
+            syncQuestionDrafts();
+            questionDrafts.splice(index, 1);
+            renderQuestionBuilder();
+        }
+
+        function collectQuestions() {
+            syncQuestionDrafts();
+            return questionDrafts
+                .map((question) => ({
+                    text: String(question.text || '').trim(),
+                    marks: Math.max(1, Number(question.marks || 1)),
+                    correctIndex: Math.max(0, Math.min(3, Number(question.correctIndex || 0))),
+                    options: (question.options || []).map((option) => String(option || '').trim()).slice(0, 4)
+                }))
+                .filter((question) => question.text || question.options.some(Boolean));
+        }
+
+        function validateQuestions(questions = []) {
+            for (let i = 0; i < questions.length; i += 1) {
+                const question = questions[i];
+                const filledOptions = question.options.filter(Boolean);
+                if (!question.text) return `Question ${i + 1}: write the question text.`;
+                if (filledOptions.length < 2) return `Question ${i + 1}: add at least two options.`;
+                if (!question.options[question.correctIndex]) return `Question ${i + 1}: selected right option is empty.`;
+            }
+            return '';
+        }
+
+        function getQuestionMarksTotal(questions = []) {
+            return questions.reduce((sum, question) => sum + Math.max(1, Number(question.marks || 1)), 0);
+        }
+
         function render() {
             const items = data(QUIZ_KEY).sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
             if (!items.length) { quizUploadList.innerHTML = '<div class="empty-note">No quiz uploaded yet.</div>'; renderSubmissions(); return; }
-            quizUploadList.innerHTML = `<table class="upload-table"><thead><tr><th>Class</th><th>Quiz</th><th>Marks</th><th>Due</th><th>File</th><th>Action</th></tr></thead><tbody>${items.map((item) => `<tr><td>${esc(item.classGrade)}</td><td><strong>${esc(item.title)}</strong><br>${esc(item.details)}</td><td>${esc(item.totalMarks || '-')}</td><td>${esc(item.dueDate || '-')}</td><td>${item.file?.dataUrl ? `<a href="${item.file.dataUrl}" download="${esc(item.file.name || 'quiz-file')}">${esc(item.file.name || 'Download')}</a>` : '-'}</td><td><div class="action-row"><button class="mini-btn edit" onclick="editItem('${item.id}')"><i data-lucide="edit-2" width="14"></i> Edit</button><button class="mini-btn delete" onclick="deleteItem('${item.id}')"><i data-lucide="trash-2" width="14"></i> Delete</button></div></td></tr>`).join('')}</tbody></table>`;
+            quizUploadList.innerHTML = `<table class="upload-table"><thead><tr><th>Class</th><th>Quiz</th><th>Marks</th><th>Pass Marks</th><th>Due</th><th>Questions</th><th>File</th><th>Action</th></tr></thead><tbody>${items.map((item) => {
+                const questionCount = Array.isArray(item.questions) ? item.questions.length : 0;
+                return `<tr><td>${esc(item.classGrade)}</td><td><strong>${esc(item.title)}</strong><br>${esc(item.details)}</td><td>${esc(item.totalMarks || '-')}</td><td>${esc(item.passMarks || '-')}</td><td>${esc(item.dueDate || '-')}</td><td>${questionCount ? `${questionCount} MCQ` : '-'}</td><td>${item.file?.dataUrl ? `<a href="${item.file.dataUrl}" download="${esc(item.file.name || 'quiz-file')}">${esc(item.file.name || 'Download')}</a>` : '-'}</td><td><div class="action-row"><button class="mini-btn edit" onclick="editItem('${item.id}')"><i data-lucide="edit-2" width="14"></i> Edit</button><button class="mini-btn delete" onclick="deleteItem('${item.id}')"><i data-lucide="trash-2" width="14"></i> Delete</button></div></td></tr>`;
+            }).join('')}</tbody></table>`;
             renderSubmissions();
             if (window.lucide) lucide.createIcons();
         }
+
         function renderSubmissions() {
             const submissions = data(QUIZ_SUBMISSION_KEY).sort((a, b) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || '')));
             if (!submissions.length) { quizSubmissionList.innerHTML = '<div class="empty-note">No student has submitted a quiz yet.</div>'; return; }
-            quizSubmissionList.innerHTML = `<table class="upload-table"><thead><tr><th>Student</th><th>Class</th><th>Quiz</th><th>Score</th><th>Analysis</th><th>Submitted</th></tr></thead><tbody>${submissions.map((item) => {
+            quizSubmissionList.innerHTML = `<table class="upload-table"><thead><tr><th>Student</th><th>Class</th><th>Quiz</th><th>Score</th><th>Result</th><th>Analysis</th><th>Submitted</th></tr></thead><tbody>${submissions.map((item) => {
                 const rows = Array.isArray(item.checkedRows) ? item.checkedRows : [];
                 const correct = rows.filter((row) => row.isCorrect).length;
-                return `<tr><td>${esc(item.studentName || '-')}<br><small>${esc(item.rollNo || item.studentId || '-')}</small></td><td>${esc(item.classGrade || '-')}</td><td>${esc(item.quizTitle || '-')}</td><td><strong>${esc(item.score)} / ${esc(item.totalMarks)}</strong></td><td>${esc(correct)} correct / ${esc(rows.length - correct)} wrong</td><td>${esc(item.submittedAt ? new Date(item.submittedAt).toLocaleString() : '-')}</td></tr>`;
+                const resultStatus = item.resultStatus || (Number(item.score || 0) >= Number(item.passMarks || item.totalMarks || 0) ? 'Pass' : 'Fail');
+                return `<tr><td>${esc(item.studentName || '-')}<br><small>${esc(item.rollNo || item.studentId || '-')}</small></td><td>${esc(item.classGrade || '-')}</td><td>${esc(item.quizTitle || '-')}</td><td><strong>${esc(item.score)} / ${esc(item.totalMarks)}</strong><br><small>Pass: ${esc(item.passMarks || '-')}</small></td><td><span class="${resultStatus === 'Pass' ? 'result-pass' : 'result-fail'}">${esc(resultStatus)}</span></td><td>${esc(correct)} correct / ${esc(rows.length - correct)} wrong</td><td>${esc(item.submittedAt ? new Date(item.submittedAt).toLocaleString() : '-')}</td></tr>`;
             }).join('')}</tbody></table>`;
         }
+
         function editItem(id) {
             const item = data(QUIZ_KEY).find((entry) => entry.id === id);
             if (!item) return;
-            quizUploadId.value = item.id; quizClass.value = item.classGrade || ''; quizTitle.value = item.title || ''; quizTotalMarks.value = item.totalMarks || ''; quizDueDate.value = item.dueDate || ''; quizDetails.value = item.details || '';
+            quizUploadId.value = item.id; quizClass.value = item.classGrade || ''; quizTitle.value = item.title || ''; quizTotalMarks.value = item.totalMarks || ''; quizPassMarks.value = item.passMarks || ''; quizDueDate.value = item.dueDate || ''; quizDetails.value = item.details || '';
+            questionDrafts = Array.isArray(item.questions) ? item.questions.map((question) => ({
+                text: question.text || '',
+                marks: Math.max(1, Number(question.marks || 1)),
+                correctIndex: Math.max(0, Number(question.correctIndex || 0)),
+                options: [...(question.options || []), '', '', '', ''].slice(0, 4)
+            })) : [];
+            renderQuestionBuilder();
             quizSaveBtn.innerHTML = '<i data-lucide="save"></i> Update Quiz';
             quizUploadForm.scrollIntoView({ behavior: 'smooth', block: 'start' }); if (window.lucide) lucide.createIcons();
         }
+
         function deleteItem(id) { save(QUIZ_KEY, data(QUIZ_KEY).filter((item) => item.id !== id)); render(); renderSubmissions(); }
+
         quizUploadForm.addEventListener('submit', async (event) => {
             event.preventDefault();
             const editId = quizUploadId.value;
             const existing = data(QUIZ_KEY).find((item) => item.id === editId);
             const file = await readFile(quizFile);
             const totalMarks = Math.max(1, Number(quizTotalMarks.value || 1));
-            const item = { id: editId || `QUIZ-${Date.now()}`, classGrade: quizClass.value, title: quizTitle.value.trim(), totalMarks, dueDate: quizDueDate.value, details: quizDetails.value.trim(), questions: [], file: file || existing?.file || null, createdAt: existing?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
-            if (!item.classGrade || !item.title || !item.details || !item.file?.dataUrl) { showAppAlert('Class, title, instructions, and a quiz file are required.', 'Missing Quiz'); return; }
+            const questions = collectQuestions();
+            const questionError = validateQuestions(questions);
+            if (questionError) { showAppAlert(questionError, 'Question Required'); return; }
+            const passMarks = Math.max(1, Number(quizPassMarks.value || Math.ceil(totalMarks / 2)));
+            if (passMarks > totalMarks) { showAppAlert('Pass marks cannot be more than total marks.', 'Invalid Marks'); return; }
+            const item = { id: editId || `QUIZ-${Date.now()}`, classGrade: quizClass.value, title: quizTitle.value.trim(), totalMarks, passMarks, dueDate: quizDueDate.value, details: quizDetails.value.trim(), questions, questionMarksTotal: getQuestionMarksTotal(questions), file: file || existing?.file || null, createdAt: existing?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
+            if (!item.classGrade || !item.title || !item.details || (!item.file?.dataUrl && !questions.length)) { showAppAlert('Class, title, instructions, and either option questions or a quiz file are required.', 'Missing Quiz'); return; }
             const items = data(QUIZ_KEY); const index = items.findIndex((entry) => entry.id === editId);
             if (index >= 0) items[index] = item; else items.push(item);
             if (!save(QUIZ_KEY, items)) return;
-            event.target.reset(); quizUploadId.value = ''; quizSaveBtn.innerHTML = '<i data-lucide="save"></i> Save Quiz'; render(); showSuccessModal(editId ? 'Quiz Updated!' : 'Quiz Uploaded!', 'Quiz file is visible in student portal.');
+            event.target.reset(); quizUploadId.value = ''; questionDrafts = []; renderQuestionBuilder(); quizSaveBtn.innerHTML = '<i data-lucide="save"></i> Save Quiz'; render(); showSuccessModal(editId ? 'Quiz Updated!' : 'Quiz Uploaded!', questions.length ? 'Option quiz is visible in student portal for auto marking.' : 'Quiz file is visible in student portal.');
         });
-        populateClasses(); render(); renderSubmissions(); if (window.lucide) lucide.createIcons();
+
+        populateClasses();
+        renderQuestionBuilder();
+        render();
+        renderSubmissions();
+        if (window.lucide) lucide.createIcons();
     </script>
 </body>
 

@@ -5,7 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Annual Charges - Apexiums School System</title>
-    <link rel="stylesheet" href="style.css?v=20260520-login-apexiums-brand">
+    <link rel="icon" type="image/png" href="images/logo.png">
+    <link rel="stylesheet" href="style.css?v=20260708-apexiums-brand">
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         .charges-layout { display:grid; grid-template-columns:minmax(280px,380px) minmax(0,1fr); gap:1rem; align-items:start; }
@@ -116,7 +117,7 @@
         </main>
     </div>
     <script src="auth.js?v=20260520-sidebar-requested-order"></script>
-    <script src="script.js?v=20260520-sidebar-classes-restore"></script>
+    <script src="script.js?v=20260705-remaining-charges-nav"></script>
     <script>
         let annualChargeStudents = [];
         let annualClassFeeDefaults = {};
@@ -139,7 +140,7 @@
 
         function getAnnualBrandingSettings() {
             const fallback = {
-                schoolName: 'My own Science school',
+                schoolName: 'Apexiums School System',
                 phone: '',
                 address: '',
                 logoDataUrl: ''
@@ -184,7 +185,7 @@
         function getAnnualBrandingFromForm() {
             const branding = getAnnualBrandingSettings();
             return {
-                schoolName: branding.schoolName || 'My own Science school',
+                schoolName: branding.schoolName || 'Apexiums School System',
                 phone: branding.phone || '',
                 address: branding.address || branding.schoolAddress || '',
                 logoSrc: getAnnualLogoSrc()
@@ -313,7 +314,7 @@
                         <div class="slip-head">
                             <div class="slip-logo">${options.logoSrc ? `<img src="${escAnnual(options.logoSrc)}" alt="School logo">` : 'SCH'}</div>
                             <div>
-                                <h2>${escAnnual(options.schoolName || 'My own Science school')}</h2>
+                                <h2>${escAnnual(options.schoolName || 'Apexiums School System')}</h2>
                                 <p>${escAnnual(options.address || 'Annual Charges Slip')}</p>
                                 ${options.phone ? `<div class="slip-contact">Phone: ${escAnnual(options.phone)}</div>` : ''}
                             </div>
@@ -370,6 +371,7 @@
                 <html>
                 <head>
                     <title>Annual Charges - ${escAnnual(selectedClass)}</title>
+    <link rel="icon" type="image/png" href="images/logo.png">
                     <style>
                         body { margin:0; font-family: Arial, sans-serif; color:#111827; background:#fff; }
                         .print-slip { page-break-after: always; padding: 14mm; }

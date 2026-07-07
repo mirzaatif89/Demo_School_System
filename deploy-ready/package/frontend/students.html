@@ -4,8 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manage Students - My own Science school</title>
-    <link rel="stylesheet" href="style.css?v=20260520-login-apexiums-brand">
+    <title>Manage Students - Apexiums School System</title>
+    <link rel="icon" type="image/png" href="images/logo.png">
+    <link rel="stylesheet" href="style.css?v=20260708-apexiums-brand">
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
@@ -1150,7 +1151,9 @@
                         <label for="studentSearchInput">Search</label>
                         <div class="student-search-control">
                             <i data-lucide="search"></i>
-                            <input type="text" id="studentSearchInput" placeholder="Search">
+                            <input type="text" id="studentSearchInput" placeholder="Search"
+                                oninput="runStudentSearchFromInput(this)"
+                                onkeydown="if(event.key==='Enter'){event.preventDefault();runStudentSearchFromInput(this);}">
                         </div>
                     </div>
                     <div class="student-filter-group">
@@ -1207,8 +1210,7 @@
                         </div>
                         <div class="input-group">
                             <label>Student ID</label>
-                            <input type="text" id="studentCode" readonly
-                                style="background-color: #f8fafc; color: var(--text-secondary); cursor: not-allowed;">
+                            <input type="text" id="studentCode" placeholder="STU-001" readonly>
                         </div>
                         <div class="input-group">
                             <label>Full Name</label>
@@ -1235,8 +1237,14 @@
                         </div>
                         <div class="input-group">
                             <label>Monthly Fee (PKR)</label>
-                            <input type="text" id="monthlyFee" placeholder="Select class to load fee" readonly
-                                style="background-color: #f8fafc; color: var(--text-secondary); cursor: not-allowed;">
+                            <input type="number" id="monthlyFee" placeholder="Select class to load fee or enter custom fee"
+                                min="0" step="1"
+                                style="background-color: #fff; color: var(--text-primary);">
+                        </div>
+                        <div class="input-group">
+                            <label>Remaining Amount (PKR)</label>
+                            <input type="number" id="remainingAmount" placeholder="0" min="0" step="1"
+                                style="background-color: #fff; color: var(--text-primary);">
                         </div>
                         <div class="input-group">
                             <label>Campus Name</label>
@@ -1248,6 +1256,10 @@
                         <div class="input-group">
                             <label>Contact (Phone)</label>
                             <input type="tel" id="parentPhone" required>
+                        </div>
+                        <div class="input-group">
+                            <label>Address</label>
+                            <input type="text" id="studentAddress" placeholder="Student address">
                         </div>
                         <div class="input-group">
                             <label>Guardian Name</label>
@@ -1331,7 +1343,8 @@
                                 <div class="password-field">
                                     <input type="password" id="studentPassword" placeholder="Assign password">
                                     <button type="button" class="password-toggle" data-toggle-password="studentPassword"
-                                        aria-label="Show password" aria-pressed="false">
+                                        onclick="togglePasswordVisibility('studentPassword', this)"
+                                        aria-label="Show password" aria-pressed="false" title="Show password">
                                         <i data-lucide="eye"></i>
                                     </button>
                                 </div>
@@ -1361,7 +1374,7 @@
                             <th>Class</th>
                             <th>Campus</th>
                             <th>Gender</th>
-                            <th>Status</th>
+                            <th>Fee Status</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -1435,6 +1448,7 @@
                 <div class="student-view-item"><strong>Gender</strong><span id="viewStudentGender">-</span></div>
                 <div class="student-view-item"><strong>Status</strong><span id="viewStudentStatus">-</span></div>
                 <div class="student-view-item"><strong>Parent Phone</strong><span id="viewStudentPhone">-</span></div>
+                <div class="student-view-item"><strong>Address</strong><span id="viewStudentAddress">-</span></div>
                 <div class="student-view-item"><strong>Guardian Name</strong><span id="viewStudentGuardianName">-</span></div>
                 <div class="student-view-item"><strong>Guardian Contact</strong><span id="viewStudentGuardianContact">-</span></div>
                 <div class="student-view-item"><strong>Email</strong><span id="viewStudentEmail">-</span></div>
@@ -1447,8 +1461,23 @@
     </div>
 
     <script src="auth.js?v=20260520-sidebar-requested-order"></script>
-    <script src="script.js?v=20260520-sidebar-classes-restore"></script>
+    <script src="script.js?v=20260705-student-server-save"></script>
     <script>
+        window.togglePasswordVisibility = window.togglePasswordVisibility || function (targetId, toggleBtn) {
+            const input = document.getElementById(targetId);
+            if (!input) return false;
+            const show = input.type === 'password';
+            input.type = show ? 'text' : 'password';
+            if (toggleBtn) {
+                toggleBtn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+                toggleBtn.setAttribute('aria-pressed', show ? 'true' : 'false');
+                toggleBtn.setAttribute('title', show ? 'Hide password' : 'Show password');
+                toggleBtn.innerHTML = '<i data-lucide="' + (show ? 'eye-off' : 'eye') + '"></i>';
+            }
+            if (window.lucide && window.lucide.createIcons) window.lucide.createIcons();
+            input.focus({ preventScroll: true });
+            return false;
+        };
         // Init Icons
         lucide.createIcons();
     </script>

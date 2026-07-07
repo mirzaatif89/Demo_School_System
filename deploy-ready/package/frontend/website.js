@@ -133,7 +133,7 @@ function renderBanners() {
             <article class="website-banner-slide${index === activeBannerIndex ? ' active' : ''}" data-banner-slide="${index}">
                 ${media}
                 <div class="website-banner-caption">
-                    <h2>${escapeHtml(text(banner.title, 'Kids Roots Jand School'))}</h2>
+                    <h2>${escapeHtml(text(banner.title, 'Apexiums School System'))}</h2>
                     ${text(banner.subtitle, '') ? `<p>${escapeHtml(banner.subtitle)}</p>` : ''}
                 </div>
             </article>
@@ -221,7 +221,7 @@ function setupInquiryForm() {
         const phone = text(document.getElementById('inquiryPhone')?.value, '');
         const message = text(document.getElementById('inquiryMessage')?.value, '');
         const body = encodeURIComponent(`Name: ${name}\nClass: ${className}\nPhone: ${phone}\n\n${message}`);
-        window.location.href = `mailto:rootsjand@gmail.com?subject=Admission Inquiry&body=${body}`;
+        window.location.href = `mailto:info@apexiums.edu.pk?subject=Admission Inquiry&body=${body}`;
     });
 }
 

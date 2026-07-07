@@ -238,6 +238,8 @@ const MODULE_KEYS = [
     'set_fee',
     'fees',
     'fee_challan',
+    'remaining_charges',
+    'payment_history',
     'fee_logos',
     'bills',
     'library',
@@ -290,6 +292,8 @@ const ALLOWED_HOME_PAGES = new Set([
     'set_fee.html',
     'fees.html',
     'fee_challan.html',
+    'remaining_charges.html',
+    'payment_history.html',
     'fee_logos.html',
     'bills.html',
     'library.html',
@@ -587,7 +591,17 @@ async function ensureUniqueStudentIdentity(Student, User, item) {
         });
 
         if (userUsernameConflict) {
-            throw new Error('This username is already used by another account.');
+            const conflictRole = String(userUsernameConflict.role || '').toLowerCase();
+            const linkedStudentId = userUsernameConflict.profileId || String(userUsernameConflict.id || '').replace(/^student_/, '');
+            const linkedStudent = conflictRole === 'student' && linkedStudentId
+                ? await Student.findByPk(linkedStudentId)
+                : null;
+
+            if (conflictRole === 'student' && !linkedStudent) {
+                await userUsernameConflict.destroy();
+            } else {
+                throw new Error('This username is already used by another account.');
+            }
         }
     }
 
@@ -681,6 +695,37 @@ function authenticateToken(req, res, next) {
     } catch (error) {
         return res.status(401).json({ success: false, message: 'Invalid or expired token.' });
     }
+}
+
+function getOptionalAuthUser(req) {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    if (!token) return null;
+
+    try {
+        return jwt.verify(token, JWT_SECRET);
+    } catch (_error) {
+        return null;
+    }
+}
+
+function isBranchUser(user = {}) {
+    return String(user?.role || '').trim().toLowerCase() === 'branch';
+}
+
+function getBranchCampusName(user = {}) {
+    return String(user?.campusName || '').trim();
+}
+
+function getBranchScopedWhere(user = {}) {
+    if (!isBranchUser(user)) return {};
+    const campusName = getBranchCampusName(user);
+    return campusName ? { campusName } : { campusName: '__NO_BRANCH_CAMPUS__' };
+}
+
+function canManageBranches(user = {}) {
+    const role = String(user?.role || '').trim().toLowerCase();
+    return role === 'admin' || role === 'superadmin' || role === 'super admin' || role === 'principal';
 }
 
 function pruneActiveSessions() {
@@ -1032,7 +1077,7 @@ async function sendAdminOtpEmail(purpose) {
     await saveAdminOtp(purpose, otp);
     const to = getAdminRecoveryEmail();
     const purposeLabel = purpose === 'forgot-password' ? 'admin password reset' : 'admin password change';
-    const schoolName = getSmtpConfig().fromName || 'Apexiums School';
+    const schoolName = getSmtpConfig().fromName || 'Apexiums School System';
 
     await sendSmtpEmail({
         to,
@@ -1526,7 +1571,10 @@ app.get('/api/students', async (req, res) => {
     if (!sequelize) return res.status(503).json({ error: 'Database offline' });
 
     try {
-        const students = await sequelize.models.Student.findAll();
+        const authUser = getOptionalAuthUser(req);
+        const students = await sequelize.models.Student.findAll({
+            where: getBranchScopedWhere(authUser)
+        });
         res.json(students);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -1944,11 +1992,23 @@ async function writeClassFeeState(classFees, classFeeHistory) {
     });
 }
 
-async function applyClassFeeToStudents(className, monthlyFee, feeFrequency) {
+async function applyClassFeeToStudents(className, monthlyFee, feeFrequency, previousMonthlyFee = '') {
     if (!sequelize.models.Student || !className) return;
-    const studentUpdate = { feeFrequency };
-    if (monthlyFee) studentUpdate.monthlyFee = monthlyFee;
-    await sequelize.models.Student.update(studentUpdate, { where: { classGrade: className } });
+    const students = await sequelize.models.Student.findAll({ where: { classGrade: className } });
+    const previousFee = String(previousMonthlyFee || '').trim();
+    for (const student of students) {
+        const studentFee = String(student.monthlyFee ?? '').trim();
+        const studentFeeAmount = Number(studentFee || 0) || 0;
+        const hasManualFee = studentFeeAmount > 0 && (
+            student.monthlyFeeCustom === true ||
+            (previousFee && studentFee !== previousFee)
+        );
+        if (hasManualFee) continue;
+        student.feeFrequency = feeFrequency;
+        if (monthlyFee) student.monthlyFee = monthlyFee;
+        student.monthlyFeeCustom = false;
+        await student.save();
+    }
 }
 
 app.get('/api/class-fees', async (_req, res) => {
@@ -1980,6 +2040,7 @@ app.post('/api/class-fees', authenticateToken, async (req, res) => {
         }
 
         const classFees = await readClassFeeConfig();
+        const previousMonthlyFee = String(classFees[className]?.monthlyFee || '').trim();
         classFees[className] = { monthlyFee, annualCharges, feeFrequency, feeMonth, feeYear };
         const classFeeHistory = await readClassFeeHistory();
         const historyEntry = {
@@ -1996,7 +2057,7 @@ app.post('/api/class-fees', authenticateToken, async (req, res) => {
         classFeeHistory.unshift(historyEntry);
 
         await writeClassFeeState(classFees, classFeeHistory);
-        await applyClassFeeToStudents(className, monthlyFee, feeFrequency);
+        await applyClassFeeToStudents(className, monthlyFee, feeFrequency, previousMonthlyFee);
 
         res.json({ success: true, classFees, classFeeHistory });
     } catch (err) {
@@ -2031,6 +2092,7 @@ app.put('/api/class-fees/history/:id', authenticateToken, async (req, res) => {
             return res.status(404).json({ success: false, message: 'Fee history record not found.' });
         }
 
+        const previousMonthlyFee = String(classFees[className]?.monthlyFee || '').trim();
         classFees[className] = { monthlyFee, annualCharges, feeFrequency, feeMonth, feeYear };
         classFeeHistory[index] = {
             ...classFeeHistory[index],
@@ -2045,7 +2107,7 @@ app.put('/api/class-fees/history/:id', authenticateToken, async (req, res) => {
         };
 
         await writeClassFeeState(classFees, classFeeHistory);
-        await applyClassFeeToStudents(className, monthlyFee, feeFrequency);
+        await applyClassFeeToStudents(className, monthlyFee, feeFrequency, previousMonthlyFee);
 
         res.json({ success: true, classFees, classFeeHistory });
     } catch (err) {
@@ -2124,9 +2186,18 @@ app.get('/api/branches', async (req, res) => {
     if (!sequelize) return res.status(503).json({ error: 'Database offline' });
 
     try {
+        const authUser = getOptionalAuthUser(req);
+        const where = { role: 'Branch' };
+        if (isBranchUser(authUser)) {
+            const campusName = getBranchCampusName(authUser);
+            where.campusName = campusName || '__NO_BRANCH_CAMPUS__';
+        }
+        const canViewCredentials = authUser && !isBranchUser(authUser);
         const branches = await sequelize.models.User.findAll({
-            where: { role: 'Branch' },
-            attributes: ['id', 'profileId', 'fullName', 'username', 'plainPassword', 'campusName', 'isActive'],
+            where,
+            attributes: canViewCredentials
+                ? ['id', 'profileId', 'fullName', 'username', 'plainPassword', 'campusName', 'isActive']
+                : ['id', 'profileId', 'fullName', 'campusName', 'isActive'],
             order: [['campusName', 'ASC']]
         });
         res.json(branches);
@@ -2135,10 +2206,13 @@ app.get('/api/branches', async (req, res) => {
     }
 });
 
-app.post('/api/branches', async (req, res) => {
+app.post('/api/branches', authenticateToken, async (req, res) => {
     if (!sequelize) return res.status(503).json({ error: 'Database offline' });
 
     try {
+        if (!canManageBranches(req.user)) {
+            return res.status(403).json({ success: false, message: 'Branch management access denied.' });
+        }
         const User = sequelize.models.User;
         const data = Array.isArray(req.body) ? req.body : [req.body];
 
@@ -2189,10 +2263,13 @@ app.post('/api/branches', async (req, res) => {
     }
 });
 
-app.delete('/api/branches/:id', async (req, res) => {
+app.delete('/api/branches/:id', authenticateToken, async (req, res) => {
     if (!sequelize) return res.status(503).json({ error: 'Database offline' });
 
     try {
+        if (!canManageBranches(req.user)) {
+            return res.status(403).json({ success: false, message: 'Branch management access denied.' });
+        }
         const deletedCount = await sequelize.models.User.destroy({
             where: {
                 id: req.params.id,
@@ -2709,6 +2786,7 @@ app.post('/api/fees/manual-payment', async (req, res) => {
             fullAmount,
             fineAmount,
             paymentMode,
+            paymentDate,
             challanNumber
         } = req.body || {};
 
@@ -2772,7 +2850,13 @@ app.post('/api/fees/manual-payment', async (req, res) => {
 
         const existingPayment = fineOnly ? null : await FeePayment.findByPk(safeChallanNumber);
         const alreadyRecorded = existingPayment && ['Paid', 'Partial'].includes(String(existingPayment.status || ''));
-        const paidAt = existingPayment?.paidAt || new Date();
+        const parsePaymentDate = (value) => {
+            const match = String(value || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (!match) return null;
+            const parsed = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+            return Number.isNaN(parsed.getTime()) ? null : parsed;
+        };
+        const paidAt = existingPayment?.paidAt || parsePaymentDate(paymentDate) || new Date();
         const paymentDateLabel = paidAt.toLocaleDateString('en-GB');
 
         const paymentRow = !fineOnly && paymentAmount > 0 ? {
@@ -3240,7 +3324,9 @@ app.get('/api/teachers', async (req, res) => {
     if (!sequelize) return res.status(503).json({ error: 'Database offline' });
 
     try {
+        const authUser = getOptionalAuthUser(req);
         const teachers = await sequelize.models.Teacher.findAll({
+            where: getBranchScopedWhere(authUser),
             attributes: [
                 'id', 'employeeCode', 'fullName', 'profileImage', 'fingerprintData', 'fatherName', 'dob', 'cnic', 'phone',
                 'email', 'address', 'qualification', 'campusName', 'gender', 'designation', 'subject', 'salary',
@@ -3259,7 +3345,10 @@ app.get('/api/staff', async (req, res) => {
     if (!sequelize) return res.status(503).json({ error: 'Database offline' });
 
     try {
-        const staff = await sequelize.models.Staff.findAll();
+        const authUser = getOptionalAuthUser(req);
+        const staff = await sequelize.models.Staff.findAll({
+            where: getBranchScopedWhere(authUser)
+        });
         res.json(staff);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -3433,6 +3522,7 @@ app.post('/api/staff', authenticateToken, async (req, res) => {
                 email: normalizeOptionalEmail(item.email),
                 password: item.password,
                 fullName: item.fullName,
+                campusName: item.campusName || null,
                 plainPassword: item.plainPassword,
                 groupKey: item.groupKey || 'staff'
             });
@@ -3903,6 +3993,7 @@ function defineStudentModel(db) {
         guardianName: DataTypes.STRING,
         guardianContact: DataTypes.STRING,
         email: { type: DataTypes.STRING, unique: true, allowNull: true },
+        address: DataTypes.TEXT,
         rollNo: DataTypes.STRING,
         formB: DataTypes.STRING,
         familyId: DataTypes.STRING,
@@ -3910,6 +4001,8 @@ function defineStudentModel(db) {
         familyNo: DataTypes.STRING,
         familyContact: DataTypes.STRING,
         monthlyFee: DataTypes.STRING,
+        monthlyFeeCustom: DataTypes.BOOLEAN,
+        remainingAmount: DataTypes.STRING,
         feeFrequency: DataTypes.STRING,
         feesStatus: { type: DataTypes.STRING, defaultValue: 'Pending' },
         paymentDate: DataTypes.STRING,
@@ -3986,6 +4079,7 @@ function defineStaffModel(db) {
         fatherName: DataTypes.STRING,
         dob: DataTypes.STRING,
         designation: DataTypes.STRING,
+        campusName: DataTypes.STRING,
         cnic: DataTypes.STRING,
         phone: DataTypes.STRING,
         email: { type: DataTypes.STRING, unique: true, allowNull: true },
@@ -4083,6 +4177,9 @@ function defineLeaveRequestModel(db) {
         fromDate: { type: DataTypes.STRING, allowNull: false },
         toDate: { type: DataTypes.STRING, allowNull: false },
         reason: { type: DataTypes.TEXT, allowNull: false },
+        fileName: DataTypes.STRING,
+        fileType: DataTypes.STRING,
+        fileData: DataTypes.TEXT('long'),
         status: { type: DataTypes.STRING, defaultValue: 'Pending' },
         reviewReason: DataTypes.TEXT,
         reviewedAt: DataTypes.STRING,
@@ -4201,7 +4298,7 @@ function defineTransportAssignmentModel(db) {
 function normalizeAttendanceStatus(status) {
     if (status === 'P') return 'Present';
     if (status === 'A') return 'Absent';
-    if (status === 'Present' || status === 'Late' || status === 'Absent') return status;
+    if (status === 'Present' || status === 'Late' || status === 'Absent' || status === 'Leave') return status;
     return 'Not Marked';
 }
 
@@ -4451,6 +4548,7 @@ async function ensureLegacySchema() {
         guardianName: { type: DataTypes.STRING, allowNull: true },
         guardianContact: { type: DataTypes.STRING, allowNull: true },
         email: { type: DataTypes.STRING, allowNull: true },
+        address: { type: DataTypes.TEXT, allowNull: true },
         rollNo: { type: DataTypes.STRING, allowNull: true },
         formB: { type: DataTypes.STRING, allowNull: true },
         familyId: { type: DataTypes.STRING, allowNull: true },
@@ -4458,6 +4556,8 @@ async function ensureLegacySchema() {
         familyNo: { type: DataTypes.STRING, allowNull: true },
         familyContact: { type: DataTypes.STRING, allowNull: true },
         monthlyFee: { type: DataTypes.STRING, allowNull: true },
+        monthlyFeeCustom: { type: DataTypes.BOOLEAN, allowNull: true },
+        remainingAmount: { type: DataTypes.STRING, allowNull: true },
         feeFrequency: { type: DataTypes.STRING, allowNull: true },
         feesStatus: { type: DataTypes.STRING, allowNull: true },
         paymentDate: { type: DataTypes.STRING, allowNull: true },
@@ -4524,6 +4624,7 @@ async function ensureLegacySchema() {
         fatherName: { type: DataTypes.STRING, allowNull: true },
         dob: { type: DataTypes.STRING, allowNull: true },
         designation: { type: DataTypes.STRING, allowNull: true },
+        campusName: { type: DataTypes.STRING, allowNull: true },
         cnic: { type: DataTypes.STRING, allowNull: true },
         phone: { type: DataTypes.STRING, allowNull: true },
         email: { type: DataTypes.STRING, allowNull: true },
@@ -4560,7 +4661,10 @@ async function ensureLegacySchema() {
     });
 
     await ensureTableColumns('LeaveRequests', {
-        reviewReason: { type: DataTypes.TEXT, allowNull: true }
+        reviewReason: { type: DataTypes.TEXT, allowNull: true },
+        fileName: { type: DataTypes.STRING, allowNull: true },
+        fileType: { type: DataTypes.STRING, allowNull: true },
+        fileData: { type: DataTypes.TEXT('long'), allowNull: true }
     });
 }
 

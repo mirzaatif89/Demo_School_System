@@ -1,5 +1,5 @@
 const { createHandler, sendJson } = require('../_lib/http');
-const { getDb } = require('../_lib/db');
+const { getDb, Op } = require('../_lib/db');
 const { JWT_SECRET, jwt } = require('../_lib/services');
 
 function normalizeClassFeeConfig(input = {}) {
@@ -67,6 +67,25 @@ function assertAdminOrPrincipal(req) {
     }
 }
 
+async function applyClassFeeToStudents(db, className, monthlyFee, feeFrequency, previousMonthlyFee = '') {
+    if (!db.models.Student || !className) return;
+    const students = await db.models.Student.findAll({ where: { classGrade: className } });
+    const previousFee = String(previousMonthlyFee || '').trim();
+    for (const student of students) {
+        const studentFee = String(student.monthlyFee ?? '').trim();
+        const studentFeeAmount = Number(studentFee || 0) || 0;
+        const hasManualFee = studentFeeAmount > 0 && (
+            student.monthlyFeeCustom === true ||
+            (previousFee && studentFee !== previousFee)
+        );
+        if (hasManualFee) continue;
+        student.feeFrequency = feeFrequency;
+        if (monthlyFee) student.monthlyFee = monthlyFee;
+        student.monthlyFeeCustom = false;
+        await student.save();
+    }
+}
+
 module.exports = createHandler({
     GET: async ({ res, db }) => {
         sendJson(res, 200, { success: true, classFees: await readClassFeeConfig(db), classFeeHistory: await readClassFeeHistory(db) });
@@ -87,6 +106,7 @@ module.exports = createHandler({
         }
 
         const classFees = await readClassFeeConfig(db);
+        const previousMonthlyFee = String(classFees[className]?.monthlyFee || '').trim();
         classFees[className] = { monthlyFee, feeFrequency, feeMonth, feeYear };
         const classFeeHistory = await readClassFeeHistory(db);
         const historyEntry = {
@@ -109,12 +129,7 @@ module.exports = createHandler({
             settingValue: JSON.stringify(classFeeHistory.slice(0, 500))
         });
 
-        if (db.models.Student) {
-            await db.models.Student.update(
-                { monthlyFee, feeFrequency },
-                { where: { classGrade: className } }
-            );
-        }
+        await applyClassFeeToStudents(db, className, monthlyFee, feeFrequency, previousMonthlyFee);
 
         sendJson(res, 200, { success: true, classFees, classFeeHistory });
     }

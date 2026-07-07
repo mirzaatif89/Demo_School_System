@@ -1,5 +1,14 @@
 const path = require('path');
 const fs = require('fs');
+const Module = require('module');
+
+const cloudLinuxNodeModules = path.join(__dirname, '..', 'nodevenv', path.basename(__dirname), 'node_modules');
+if (fs.existsSync(cloudLinuxNodeModules)) {
+    process.env.NODE_PATH = process.env.NODE_PATH
+        ? `${cloudLinuxNodeModules}${path.delimiter}${process.env.NODE_PATH}`
+        : cloudLinuxNodeModules;
+    Module._initPaths();
+}
 
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 

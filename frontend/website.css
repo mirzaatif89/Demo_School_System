@@ -161,6 +161,77 @@ a {
     background-position: center;
 }
 
+.website-banner-section {
+    max-width: 1180px;
+    margin: 2rem auto 0;
+    padding: 0 1rem;
+}
+
+.website-banner-track {
+    position: relative;
+    min-height: 280px;
+}
+
+.website-banner-slide {
+    display: none;
+    overflow: hidden;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+}
+
+.website-banner-slide.active {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.8fr);
+}
+
+.website-banner-media img {
+    width: 100%;
+    height: 340px;
+    object-fit: cover;
+    display: block;
+}
+
+.website-banner-caption {
+    display: grid;
+    align-content: center;
+    gap: 0.75rem;
+    padding: 2rem;
+}
+
+.website-banner-caption h2 {
+    margin: 0;
+    font-family: "Manrope", "Segoe UI", Arial, sans-serif;
+    font-size: clamp(1.6rem, 3vw, 2.5rem);
+    line-height: 1.12;
+}
+
+.website-banner-caption p {
+    margin: 0;
+    color: var(--muted);
+}
+
+.website-banner-dots {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    padding-top: 1rem;
+}
+
+.website-banner-dots button {
+    width: 10px;
+    height: 10px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: var(--line);
+}
+
+.website-banner-dots button.active {
+    background: var(--primary);
+}
+
 .home-banner-inner {
     max-width: 720px;
 }
@@ -245,11 +316,19 @@ a {
     background: var(--accent);
 }
 
-.secondary-action,
-.portal-actions a:last-child {
+.secondary-action {
     color: #ffffff;
     border: 1px solid rgba(255, 255, 255, 0.7);
     background: transparent;
+}
+
+.portal-actions a {
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.7);
+}
+
+.portal-actions a:first-child {
+    border-color: var(--accent);
 }
 
 .content-section,
@@ -335,6 +414,72 @@ a {
     grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.admission-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(320px, 1.1fr);
+    gap: 1.5rem;
+    align-items: start;
+}
+
+.admission-layout h3 {
+    margin: 0 0 1rem;
+    font-family: "Manrope", "Segoe UI", Arial, sans-serif;
+    font-size: 1.35rem;
+}
+
+.process-list {
+    display: grid;
+    gap: 0.75rem;
+    margin: 0;
+    padding-left: 1.25rem;
+    color: var(--muted);
+    font-weight: 700;
+}
+
+.inquiry-form {
+    display: grid;
+    gap: 0.9rem;
+    padding: 1.25rem;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+}
+
+.inquiry-form label {
+    display: grid;
+    gap: 0.35rem;
+    color: var(--ink);
+    font-family: "Manrope", "Segoe UI", Arial, sans-serif;
+    font-weight: 800;
+}
+
+.inquiry-form input,
+.inquiry-form textarea {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 0.82rem 0.9rem;
+    font: inherit;
+    color: var(--ink);
+    background: #ffffff;
+}
+
+.inquiry-form textarea {
+    min-height: 120px;
+    resize: vertical;
+}
+
+.inquiry-form button {
+    border: 0;
+    border-radius: 6px;
+    padding: 0.9rem 1rem;
+    color: #ffffff;
+    background: var(--primary);
+    font-family: "Manrope", "Segoe UI", Arial, sans-serif;
+    font-weight: 800;
+    cursor: pointer;
+}
+
 .wide-panel {
     grid-column: 1 / -1;
 }
@@ -403,7 +548,8 @@ a {
     grid-template-columns: repeat(3, 1fr);
 }
 
-.contact-grid a {
+.contact-grid a,
+.contact-grid > span {
     display: flex;
     gap: 0.75rem;
     align-items: center;
@@ -469,7 +615,9 @@ a {
     }
 
     .home-banner,
-    .portal-section {
+    .portal-section,
+    .website-banner-slide.active,
+    .admission-layout {
         grid-template-columns: 1fr;
     }
 

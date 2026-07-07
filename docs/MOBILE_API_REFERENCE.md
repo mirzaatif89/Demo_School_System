@@ -1,4 +1,4 @@
-# Kids Roots Jand CRM API Reference
+# Apexiums School System CRM API Reference
 
 Base URL:
 

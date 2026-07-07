@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Teacher Attendance - Apexiueum</title>
-    <link rel="stylesheet" href="style.css?v=20260520-login-apexiums-brand">
+    <link rel="icon" type="image/png" href="images/logo.png">
+    <link rel="stylesheet" href="style.css?v=20260708-apexiums-brand">
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         .header { margin-bottom: 0.9rem; }
@@ -86,7 +87,7 @@
         </main>
     </div>
     <script src="auth.js?v=20260520-sidebar-requested-order"></script>
-    <script src="script.js?v=20260520-sidebar-classes-restore"></script>
+    <script src="script.js?v=20260705-global-campus-filter"></script>
     <script>
         const TEACHER_ATTENDANCE_KEY = 'eduCore_teacher_attendance';
 
@@ -213,6 +214,11 @@
             const tbody = document.getElementById('teacherAttendanceTableBody');
             const term = document.getElementById('teacherAttendanceSearch').value.trim().toLowerCase();
             const dateKey = getSelectedTeacherDateKey();
+            const selectedCampus = typeof getGlobalCampusFilterForCurrentUser === 'function'
+                ? getGlobalCampusFilterForCurrentUser()
+                : (localStorage.getItem('eduCore_dashboard_campus_filter') || 'all');
+            const campusMatches = (employee) => !selectedCampus || selectedCampus === 'all' ||
+                String(employee.campusName || 'Main Campus').trim().toLowerCase() === String(selectedCampus).trim().toLowerCase();
             const teachers = getData(STORAGE_KEY_TEACHERS).map((teacher) => ({
                 id: teacher.id,
                 fullName: teacher.fullName || '-',
@@ -226,6 +232,7 @@
                 campusName: member.campusName || 'Main Campus'
             }));
             const employees = (isStaffAttendanceMode() ? staffMembers : teachers)
+                .filter(campusMatches)
                 .filter((employee) => (`${employee.fullName || ''} ${employee.roleLabel || ''} ${employee.campusName || ''}`).toLowerCase().includes(term));
 
             tbody.innerHTML = '';
