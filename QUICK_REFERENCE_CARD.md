@@ -1,6 +1,6 @@
 # 📋 DEPLOYMENT QUICK REFERENCE CARD
 
-## 🎯 MISSION: Deploy happy-day-restore branch to kidsrootsjand.com
+## 🎯 MISSION: Deploy happy-day-restore branch to apexiumsschool.com
 
 ---
 
@@ -126,14 +126,14 @@ Tool: SSH Terminal
 Time: 2 minutes
 Tool: Your Browser
 
-[ ] Open: https://kidsrootsjand.com
+[ ] Open: https://apexiumsschool.com
 [ ] Page loads properly
 [ ] CSS styling visible
 [ ] No errors in console
 
 [ ] Login page visible
 [ ] Try admin login:
-    URL: https://kidsrootsjand.com/admin
+    URL: https://apexiumsschool.com/admin
     User: admin
     Pass: admin123
 [ ] Dashboard loads
@@ -165,8 +165,8 @@ Agar sabkuch green ✓ nikla toh:
 ```
 YOUR SCHOOL CRM IS NOW LIVE!
 
-URL: https://kidsrootsjand.com
-Admin: https://kidsrootsjand.com/admin
+URL: https://apexiumsschool.com
+Admin: https://apexiumsschool.com/admin
 Database: school_system (Hostinger)
 Branch: happy-day-restore ✅
 ```
@@ -177,7 +177,7 @@ Branch: happy-day-restore ✅
 
 After deployment, verify:
 
-- [ ] Homepage loads: https://kidsrootsjand.com
+- [ ] Homepage loads: https://apexiumsschool.com
 - [ ] Admin login works: admin / admin123
 - [ ] Student data visible
 - [ ] Classes load
@@ -264,7 +264,7 @@ node app.js
 ## 🎯 CURRENT STATUS
 
 **Branch:** happy-day-restore ✅  
-**Domain:** kidsrootsjand.com  
+**Domain:** apexiumsschool.com  
 **Host:** Hostinger  
 **Database:** school_system  
 **Status:** Ready to deploy! 🚀

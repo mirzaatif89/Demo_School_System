@@ -5,7 +5,7 @@
 ```
 Branch Name: happy-day-restore ✅ (aap currently is par ho)
 Status: Ready for production
-Deployment Target: kidsrootsjand.com
+Deployment Target: apexiumsschool.com
 Type: Node.js + Express + MySQL
 ```
 
@@ -36,7 +36,7 @@ git status
 git push origin happy-day-restore
 
 # Step 2: Hostinger par SSH
-ssh username@kidsrootsjand.com
+ssh username@apexiumsschool.com
 cd public_html
 
 # Step 3: Clone ya Pull
@@ -63,7 +63,7 @@ FileZilla se:
 
 ```bash
 # SSH mein jaao apne current server par:
-ssh username@kidsrootsjand.com
+ssh username@apexiumsschool.com
 cd project_folder
 
 # 1. Current branch check karo
@@ -91,7 +91,7 @@ git remote -v
 
 ```bash
 # 1. Hostinger par SSH
-ssh your_username@kidsrootsjand.com
+ssh your_username@apexiumsschool.com
 
 # 2. public_html mein jao
 cd public_html
@@ -343,7 +343,7 @@ bash troubleshoot.sh
 ```
 ✅ Git branch: happy-day-restore
 ✅ App status: online
-✅ Browser: https://kidsrootsjand.com loads
+✅ Browser: https://apexiumsschool.com loads
 ✅ Admin login: works
 ✅ Database: connected
 ✅ HTTPS: enabled

@@ -1,9 +1,6 @@
 const apiBase = '/api';
 
 const state = {
-    students: [],
-    teachers: [],
-    staff: [],
     notices: [],
     branches: [],
     banners: []
@@ -32,55 +29,6 @@ async function getJson(endpoint, fallback) {
     }
 }
 
-function groupStudentsByClass(students) {
-    const groups = new Map();
-    students.forEach((student) => {
-        const className = text(student.classGrade || student.className || student.class || student.grade || student.admissionClass, 'Unassigned');
-        groups.set(className, (groups.get(className) || 0) + 1);
-    });
-    return [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-}
-
-function renderStats() {
-    const classes = groupStudentsByClass(state.students);
-    setText('studentCount', state.students.length);
-    setText('teacherCount', state.teachers.length);
-    setText('staffCount', state.staff.length);
-    setText('classCount', classes.length);
-    setText('liveSummary', `${state.students.length} students, ${state.teachers.length} teachers, ${classes.length} classes`);
-}
-
-function renderClasses() {
-    const container = document.getElementById('classList');
-    if (!container) return;
-    const classes = groupStudentsByClass(state.students);
-    if (!classes.length) {
-        container.innerHTML = '<p class="empty-state">No class records found yet.</p>';
-        return;
-    }
-    container.innerHTML = classes.slice(0, 8).map(([className, count]) => `
-        <div class="class-item">
-            <strong>${escapeHtml(className)}</strong>
-            <span>${count} student${count === 1 ? '' : 's'} registered</span>
-        </div>
-    `).join('');
-}
-
-function renderFaculty() {
-    const container = document.getElementById('facultyList');
-    if (!container) return;
-    if (!state.teachers.length) {
-        container.innerHTML = '<p class="empty-state">No teacher records found yet.</p>';
-        return;
-    }
-    container.innerHTML = state.teachers.slice(0, 6).map((teacher) => `
-        <div class="faculty-item">
-            <strong>${escapeHtml(text(teacher.fullName, 'Teacher'))}</strong>
-            <span>${escapeHtml(text(teacher.subject || teacher.designation, 'Faculty'))}</span>
-        </div>
-    `).join('');
-}
-
 function renderNotices() {
     const container = document.getElementById('noticeList');
     if (!container) return;
@@ -98,6 +46,7 @@ function renderNotices() {
 
 function renderContact() {
     const activeBranch = state.branches.find((branch) => branch.isActive !== false) || state.branches[0];
+    if (!activeBranch) return;
     const address = text(activeBranch?.campusName || activeBranch?.fullName, 'Main Campus');
     setText('headerAddress', address);
     setText('contactAddress', address);
@@ -133,7 +82,7 @@ function renderBanners() {
             <article class="website-banner-slide${index === activeBannerIndex ? ' active' : ''}" data-banner-slide="${index}">
                 ${media}
                 <div class="website-banner-caption">
-                    <h2>${escapeHtml(text(banner.title, 'Apexiums School System'))}</h2>
+                    <h2>${escapeHtml(text(banner.title, 'PESS JAND'))}</h2>
                     ${text(banner.subtitle, '') ? `<p>${escapeHtml(banner.subtitle)}</p>` : ''}
                 </div>
             </article>
@@ -171,26 +120,17 @@ function escapeHtml(value) {
 }
 
 async function loadWebsiteData() {
-    const [students, teachers, staff, noticePayload, branches, bannerPayload] = await Promise.all([
-        getJson('/students', []),
-        getJson('/teachers', []),
-        getJson('/staff', []),
+    const [noticePayload, branches, bannerPayload] = await Promise.all([
         getJson('/special-notices', { notices: [] }),
         getJson('/branches', []),
         getJson('/banners', { banners: [] })
     ]);
 
-    state.students = Array.isArray(students) ? students : [];
-    state.teachers = Array.isArray(teachers) ? teachers : [];
-    state.staff = Array.isArray(staff) ? staff : [];
     state.notices = Array.isArray(noticePayload?.notices) ? noticePayload.notices : [];
     state.branches = Array.isArray(branches) ? branches : [];
-    state.banners = Array.isArray(bannerPayload?.banners) ? bannerPayload.banners : [];
+    state.banners = Array.isArray(bannerPayload?.banners) ? bannerPayload.banners : (Array.isArray(bannerPayload) ? bannerPayload : []);
 
     renderBanners();
-    renderStats();
-    renderClasses();
-    renderFaculty();
     renderNotices();
     renderContact();
 }
@@ -221,7 +161,7 @@ function setupInquiryForm() {
         const phone = text(document.getElementById('inquiryPhone')?.value, '');
         const message = text(document.getElementById('inquiryMessage')?.value, '');
         const body = encodeURIComponent(`Name: ${name}\nClass: ${className}\nPhone: ${phone}\n\n${message}`);
-        window.location.href = `mailto:info@apexiums.edu.pk?subject=Admission Inquiry&body=${body}`;
+        window.location.href = `mailto:pessabubakar65@gmail.com?subject=Admission Inquiry&body=${body}`;
     });
 }
 

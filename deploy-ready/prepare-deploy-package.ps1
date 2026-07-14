@@ -9,14 +9,19 @@ $itemsToCopy = @(
     'app.js',
     'package.json',
     'package-lock.json',
+    'api',
     'backend',
     'frontend',
     'config',
+    'data',
+    'admin_credentials.json',
     'permissions.json',
     'permissions-detailed.json',
     'date_sheet.json',
     '.htaccess',
-    'ecosystem.config.js'
+    'ecosystem.config.js',
+    'render.yaml',
+    'vercel.json'
 )
 
 foreach ($item in $itemsToCopy) {
@@ -35,4 +40,3 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'cpanel-nodejs-notes.md') -Desti
 
 Write-Host "Deploy package prepared at: $packageDir"
 Write-Host "Upload everything inside deploy-ready/package to your server project root."
-

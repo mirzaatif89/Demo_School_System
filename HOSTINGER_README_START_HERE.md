@@ -1,6 +1,6 @@
 # 🚀 Hostinger پر School CRM Deploy کریں - آپ کے لیے تیار شدہ
 
-**Domain:** kidsrootsjand.com  
+**Domain:** apexiumsschool.com  
 **Prepared For:** Hostinger Hosting  
 
 ---
@@ -68,7 +68,7 @@ NODE_ENV=production
 
 ```
 FileZilla استعمال کریں:
-Host: sftp://your_username@kidsrootsjand.com
+Host: sftp://your_username@apexiumsschool.com
 Port: 22
 Username: Hostinger username
 Password: Hostinger password
@@ -89,7 +89,7 @@ Password: Hostinger password
 ```bash
 # PuTTY یا Terminal سے:
 
-ssh your_username@kidsrootsjand.com
+ssh your_username@apexiumsschool.com
 cd public_html
 
 # Dependencies install کریں:
@@ -108,7 +108,7 @@ pm2 status
 ### 5️⃣ Browser میں جائیں (1 منٹ)
 
 ```
-https://kidsrootsjand.com
+https://apexiumsschool.com
 ```
 
 ✨ **مبارک ہو! آپ کا app live ہے!**
@@ -213,7 +213,7 @@ support@hostinger.com
 ## 🎯 آپ کی Site
 
 ```
-URL: https://kidsrootsjand.com
+URL: https://apexiumsschool.com
 Admin: /admin
 Login: /login
 Database: school_system (Hostinger cPanel میں)

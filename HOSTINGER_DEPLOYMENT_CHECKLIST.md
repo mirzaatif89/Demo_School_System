@@ -6,7 +6,7 @@
 - [ ] Node.js enabled on hosting (18+)
 - [ ] SSH access available
 - [ ] MySQL Database access ready
-- [ ] Domain: `kidsrootsjand.com` 
+- [ ] Domain: `apexiumsschool.com` 
 - [ ] SSL Certificate ready
 
 ---
@@ -70,7 +70,7 @@ Structure:
 
 ```bash
 # SSH into server
-ssh your_username@kidsrootsjand.com
+ssh your_username@apexiumsschool.com
 cd public_html
 
 # Install only production dependencies
@@ -138,13 +138,13 @@ mysqldump -u root -p school_system > backup.sql
 
 ```bash
 # SSH into server and test
-curl https://kidsrootsjand.com
+curl https://apexiumsschool.com
 pm2 logs school-crm
 
 # Check in browser:
-https://kidsrootsjand.com
-https://kidsrootsjand.com/login
-https://kidsrootsjand.com/admin
+https://apexiumsschool.com
+https://apexiumsschool.com/login
+https://apexiumsschool.com/admin
 ```
 
 ---
@@ -211,4 +211,4 @@ pm2 restart school-crm
 
 ---
 
-**After deployment:** Your School CRM will be live at `https://kidsrootsjand.com` ✨
+**After deployment:** Your School CRM will be live at `https://apexiumsschool.com` ✨

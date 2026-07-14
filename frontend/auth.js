@@ -153,6 +153,7 @@
         'student_attendance_report.html': { moduleKey: 'student_attendance_report', defaultHome: 'dashboard.html', label: 'Student Attendance Report', icon: 'bar-chart-3' },
         'teacher_attendance_report.html': { moduleKey: 'teacher_attendance_report', defaultHome: 'dashboard.html', label: 'Teacher Attendance Report', icon: 'line-chart' },
         'notifications.html': { moduleKey: 'notifications', defaultHome: 'dashboard.html', label: 'Notifications', icon: 'bell' },
+        'messages.html': { moduleKey: 'messages', defaultHome: 'dashboard.html', label: 'Messages', icon: 'message-circle' },
         'special_notices.html': { moduleKey: 'special_notices', defaultHome: 'dashboard.html', label: 'Special Notices', icon: 'megaphone' },
         'exams.html': { moduleKey: 'exams', defaultHome: 'dashboard.html', label: 'Exams', icon: 'clipboard-list' },
         'exam_schedule.html': { moduleKey: 'exams', defaultHome: 'dashboard.html', label: 'Exam Schedule', icon: 'calendar-days' },
@@ -202,6 +203,7 @@
     function toRoutePath(pageName = '') {
         const normalizedPage = normalizePageName(pageName);
         if (normalizedPage === 'index.html') return '/';
+        if (normalizedPage === 'login.html') return '/login';
         if (normalizedPage.endsWith('.html')) return normalizedPage;
         return String(pageName || 'login.html').replace(/^\/+/, '');
     }
@@ -262,6 +264,7 @@
                     student_attendance_report: 'view',
                     teacher_attendance_report: 'view',
                     notifications: 'manage',
+                    messages: 'manage',
                     special_notices: 'manage',
                     exams: 'manage',
                     bills: 'manage',
@@ -297,6 +300,7 @@
                     student_attendance: 'edit',
                     exams: 'view',
                     notifications: 'view',
+                    messages: 'view',
                     aboutme: 'view'
                 }
             },
@@ -311,6 +315,7 @@
                     student_attendance_report: 'view',
                     exams: 'view',
                     special_notices: 'view',
+                    messages: 'view',
                     aboutme: 'view'
                 }
             },
@@ -323,6 +328,7 @@
                     fee_challan: 'view',
                     exams: 'view',
                     special_notices: 'view',
+                    messages: 'view',
                     aboutme: 'view'
                 }
             }
@@ -450,6 +456,30 @@
         callback();
     }
 
+    function keepActiveSidebarItemVisible(navLinks) {
+        if (!navLinks) return;
+
+        const activeItem = navLinks.querySelector(
+            '.nav-subitem.active[href], .nav-item.active[href], .nav-dropdown.open .nav-dropdown-toggle.active, .nav-item.active'
+        );
+        if (!activeItem) return;
+
+        window.requestAnimationFrame(() => {
+            const navRect = navLinks.getBoundingClientRect();
+            const itemRect = activeItem.getBoundingClientRect();
+
+            if (itemRect.width && navRect.width && navLinks.scrollWidth > navLinks.clientWidth) {
+                const itemCenter = itemRect.left - navRect.left + navLinks.scrollLeft + (itemRect.width / 2);
+                navLinks.scrollLeft = Math.max(0, itemCenter - (navLinks.clientWidth / 2));
+            }
+
+            if (itemRect.height && navRect.height && navLinks.scrollHeight > navLinks.clientHeight) {
+                const itemCenter = itemRect.top - navRect.top + navLinks.scrollTop + (itemRect.height / 2);
+                navLinks.scrollTop = Math.max(0, itemCenter - (navLinks.clientHeight / 2));
+            }
+        });
+    }
+
     const WELCOME_SESSION_KEY = 'eduCore_welcome_payload';
 
     function escapeWelcomeText(value) {
@@ -465,9 +495,9 @@
     function getWelcomeSchoolName() {
         try {
             const settings = JSON.parse(localStorage.getItem('eduCore_settings') || '{}') || {};
-            return String(settings.schoolName || settings.schoolTitle || 'Apexiums School System').trim() || 'Apexiums School System';
+            return String(settings.schoolName || settings.schoolTitle || 'PESS JAND').trim() || 'PESS JAND';
         } catch (_error) {
-            return 'Apexiums School System';
+            return 'PESS JAND';
         }
     }
 
@@ -492,7 +522,7 @@
         if (document.getElementById('eduWelcomeOverlay')) return;
 
         const displayName = String(payload.displayName || loggedInUser?.fullName || loggedInUser?.username || 'User').trim() || 'User';
-        const schoolName = String(payload.schoolName || getWelcomeSchoolName()).trim() || 'Apexiums School System';
+        const schoolName = String(payload.schoolName || getWelcomeSchoolName()).trim() || 'PESS JAND';
         const logoSrc = 'images/logo.png';
         const overlay = document.createElement('div');
         overlay.id = 'eduWelcomeOverlay';
@@ -637,6 +667,8 @@
                     .filter((item) => item.style.display !== 'none');
                 if (!visibleLinks.length) dropdown.style.display = 'none';
             });
+
+            document.querySelectorAll('.sidebar .nav-links').forEach(keepActiveSidebarItemVisible);
         });
     }
 
@@ -735,6 +767,7 @@
                     ]
                 },
                 { type: 'link', page: 'notifications.html', label: 'Notifications', icon: 'bell-ring' },
+                { type: 'link', page: 'messages.html', label: 'Messages', icon: 'message-circle' },
                 {
                     type: 'dropdown',
                     label: 'Permissions',
@@ -810,6 +843,7 @@
             });
 
             if (window.lucide && window.lucide.createIcons) window.lucide.createIcons();
+            keepActiveSidebarItemVisible(navLinks);
         });
     }
 
@@ -1116,7 +1150,7 @@
         return `
             <aside class="sidebar" data-portal-sidebar>
                 <div class="logo-section">
-                    <img class="sidebar-logo-img" src="images/logo.png" alt="Apexiums School System logo">
+                    <img class="sidebar-logo-img" src="images/logo.png" alt="PESS JAND logo">
                 </div>
                 <div class="portal-sidebar-user">
                     <strong>${escapeHtml(displayName)}</strong>
@@ -1245,8 +1279,16 @@
                 },
                 body: JSON.stringify({ page: currentPage })
             })
-                .then((response) => {
-                    if (response.status === 401 || response.status === 403) {
+                .then(async (response) => {
+                    if (response.status !== 401) return;
+                    let message = '';
+                    try {
+                        const payload = await response.json();
+                        message = String(payload?.message || '').toLowerCase();
+                    } catch (_error) {
+                        message = '';
+                    }
+                    if (!message || /invalid|expired|token|required/.test(message)) {
                         logoutUser();
                     }
                 })
@@ -1327,6 +1369,7 @@ function logoutUser(event) {
     sessionStorage.removeItem('loggedInUser');
     sessionStorage.removeItem('eduCore_token');
     sessionStorage.removeItem('eduCore_student_profile');
+    sessionStorage.removeItem('eduCore_session_id');
     sessionStorage.removeItem('eduCore_permissions_config');
     window.location.href = '/login';
 }

@@ -74,10 +74,11 @@ async function applyClassFeeToStudents(db, className, monthlyFee, feeFrequency, 
     for (const student of students) {
         const studentFee = String(student.monthlyFee ?? '').trim();
         const studentFeeAmount = Number(studentFee || 0) || 0;
+        const isFreeStudy = student.freeStudy === true || String(student.zeroFeeReason || '').trim();
         const hasManualFee = studentFeeAmount > 0 && (
             student.monthlyFeeCustom === true ||
             (previousFee && studentFee !== previousFee)
-        );
+        ) || isFreeStudy;
         if (hasManualFee) continue;
         student.feeFrequency = feeFrequency;
         if (monthlyFee) student.monthlyFee = monthlyFee;

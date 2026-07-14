@@ -1,153 +1,104 @@
-name: Deploy Live
+name: Auto Deploy Live (cPanel SSH)
 
 on:
   workflow_dispatch:
 
 concurrency:
-  group: deploy-live
+  group: live-deploy
   cancel-in-progress: true
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Create release archive
-        shell: bash
-        run: |
-          set -euo pipefail
-          release_file="$RUNNER_TEMP/release.tgz"
-          tar \
-            --exclude='.git' \
-            --exclude='.github' \
-            --exclude='.env' \
-            --exclude='node_modules' \
-            --exclude='logs' \
-            --exclude='uploads' \
-            --exclude='tmp' \
-            --exclude='deploy-ready/package' \
-            --exclude='deploy-ready/*.zip' \
-            -czf "$release_file" .
-          cp "$release_file" release.tgz
-
-      - name: Deploy via SSH
+      - name: Validate required SSH secrets
+        id: precheck
         shell: bash
         env:
           LIVE_HOST: ${{ secrets.LIVE_HOST }}
           LIVE_USER: ${{ secrets.LIVE_USER }}
-          LIVE_PORT: ${{ secrets.LIVE_PORT }}
           LIVE_SSH_KEY: ${{ secrets.LIVE_SSH_KEY }}
-          LIVE_SSH_PASSPHRASE: ${{ secrets.LIVE_SSH_PASSPHRASE }}
           LIVE_APP_PATH: ${{ secrets.LIVE_APP_PATH }}
         run: |
-          set -euo pipefail
-
           missing=()
-          for name in LIVE_HOST LIVE_USER LIVE_PORT LIVE_SSH_KEY LIVE_APP_PATH; do
-            if [ -z "${!name}" ]; then
-              missing+=("$name")
+          for v in LIVE_HOST LIVE_USER LIVE_SSH_KEY LIVE_APP_PATH; do
+            if [ -z "${!v}" ]; then
+              missing+=("$v")
             fi
           done
 
-          if [ "${#missing[@]}" -gt 0 ]; then
-            echo "Missing required GitHub secrets: ${missing[*]}"
-            exit 1
-          fi
-
-          mkdir -p ~/.ssh
-          key_file="$(mktemp)"
-          printf '%s\n' "$LIVE_SSH_KEY" > "$key_file"
-          chmod 600 "$key_file"
-
-          eval "$(ssh-agent -s)"
-
-          if [ -n "${LIVE_SSH_PASSPHRASE:-}" ]; then
-            askpass_file="$(mktemp)"
-            {
-              echo '#!/usr/bin/env bash'
-              echo 'printf "%s\n" "$LIVE_SSH_PASSPHRASE"'
-            } > "$askpass_file"
-            chmod 700 "$askpass_file"
-            DISPLAY=:0 SSH_ASKPASS="$askpass_file" SSH_ASKPASS_REQUIRE=force setsid ssh-add "$key_file" </dev/null
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "missing=${missing[*]}" >> "$GITHUB_OUTPUT"
+            echo "Missing required secrets: ${missing[*]}"
           else
-            ssh-add "$key_file"
+            echo "ready=true" >> "$GITHUB_OUTPUT"
           fi
 
-          remote_release="/tmp/school-crm-${GITHUB_SHA}.tgz"
+      - name: Deploy latest code on live server
+        if: ${{ steps.precheck.outputs.ready == 'true' }}
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.LIVE_HOST }}
+          username: ${{ secrets.LIVE_USER }}
+          key: ${{ secrets.LIVE_SSH_KEY }}
+          port: ${{ secrets.LIVE_PORT }}
+          script_stop: true
+          script: |
+            set -e
 
-          scp -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=30 -o StrictHostKeyChecking=no -P "$LIVE_PORT" release.tgz \
-            "$LIVE_USER@$LIVE_HOST:$remote_release"
+            APP_PATH="${{ secrets.LIVE_APP_PATH }}"
+            BRANCH="${{ secrets.LIVE_BRANCH }}"
+            if [ -z "$BRANCH" ]; then BRANCH="main"; fi
 
-          ssh -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=30 -o StrictHostKeyChecking=no -p "$LIVE_PORT" "$LIVE_USER@$LIVE_HOST" \
-            "APP_PATH='$LIVE_APP_PATH' RELEASE='$remote_release' bash -s" <<'REMOTE_SCRIPT'
-          set -euo pipefail
-
-          mkdir -p "$APP_PATH"
-          cd "$APP_PATH"
-
-          preserve_dir="$(mktemp -d)"
-          for item in .env admin_credentials.json permissions.json permissions-detailed.json date_sheet.json uploads logs; do
-            if [ -e "$item" ]; then
-              cp -a "$item" "$preserve_dir/"
+            if [ -z "$APP_PATH" ]; then
+              echo "LIVE_APP_PATH secret is missing."
+              exit 1
             fi
-          done
 
-          find "$APP_PATH" -mindepth 1 -maxdepth 1 \
-            ! -name '.env' \
-            ! -name 'node_modules' \
-            ! -name 'admin_credentials.json' \
-            ! -name 'permissions.json' \
-            ! -name 'permissions-detailed.json' \
-            ! -name 'date_sheet.json' \
-            ! -name 'uploads' \
-            ! -name 'logs' \
-            -exec rm -rf {} +
+            cd "$APP_PATH"
 
-          tar -xzf "$RELEASE" -C "$APP_PATH"
-
-          for item in .env admin_credentials.json permissions.json permissions-detailed.json date_sheet.json uploads logs; do
-            if [ -e "$preserve_dir/$item" ]; then
-              rm -rf "$APP_PATH/$item"
-              cp -a "$preserve_dir/$item" "$APP_PATH/"
+            if [ ! -d ".git" ]; then
+              echo "No git repository found at $APP_PATH."
+              echo "Clone your GitHub repo there one time first."
+              exit 1
             fi
-          done
 
-          rm -rf "$preserve_dir" "$RELEASE"
-          mkdir -p logs uploads
+            BACKUP_DIR="$APP_PATH/.deploy-backup"
+            rm -rf "$BACKUP_DIR"
+            mkdir -p "$BACKUP_DIR"
 
-          if [ ! -f ".env" ]; then
-            echo "Missing .env in $APP_PATH. Create it on the server before deploying."
-            exit 1
-          fi
+            mkdir -p "$BACKUP_DIR/data"
+            for file in .env data/permissions.json data/date_sheet.json data/admin_credentials.json; do
+              if [ -f "$file" ]; then
+                mkdir -p "$BACKUP_DIR/$(dirname "$file")"
+                cp "$file" "$BACKUP_DIR/$file"
+              fi
+            done
 
-          npm ci --omit=dev
+            git fetch --all --prune
+            git checkout "$BRANCH"
+            git reset --hard "origin/$BRANCH"
 
-          if npm run | grep -qE '^[[:space:]]+build$'; then
-            npm run build
-          fi
+            for file in .env data/permissions.json data/date_sheet.json data/admin_credentials.json; do
+              if [ -f "$BACKUP_DIR/$file" ]; then
+                mkdir -p "$(dirname "$file")"
+                cp "$BACKUP_DIR/$file" "$file"
+              fi
+            done
 
-          if command -v pm2 >/dev/null 2>&1; then
-            PM2_CMD="pm2"
-          else
-            npm install --no-save pm2
-            PM2_CMD="npx pm2"
-          fi
+            if [ -f "package-lock.json" ]; then
+              npm ci --omit=dev
+            else
+              npm install --omit=dev
+            fi
 
-          if $PM2_CMD describe school-crm >/dev/null 2>&1; then
-            $PM2_CMD restart ecosystem.config.js --update-env
-          else
-            $PM2_CMD start ecosystem.config.js --update-env
-          fi
+            mkdir -p tmp
+            touch tmp/restart.txt
 
-          $PM2_CMD save
-          echo "Deployment completed."
-          REMOTE_SCRIPT
+            echo "Live deployment completed."
 
-          rm -f "$key_file"
-          if [ -n "${askpass_file:-}" ]; then
-            rm -f "$askpass_file"
-          fi
-          ssh-agent -k
+      - name: Skip deploy (missing required secrets)
+        if: ${{ steps.precheck.outputs.ready != 'true' }}
+        run: |
+          echo "Skipping live deploy. Missing secrets: ${{ steps.precheck.outputs.missing }}"

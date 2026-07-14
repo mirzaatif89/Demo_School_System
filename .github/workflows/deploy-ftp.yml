@@ -39,8 +39,9 @@ jobs:
           done
 
           if [ ${#missing[@]} -gt 0 ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "missing=${missing[*]}" >> "$GITHUB_OUTPUT"
             echo "Missing required secrets: ${missing[*]}"
-            exit 1
           else
             echo "ready=true" >> "$GITHUB_OUTPUT"
           fi
@@ -55,7 +56,7 @@ jobs:
           port: ${{ secrets.FTP_PORT }}
           protocol: ftp
           local-dir: ./
-          server-dir: demo_school_system/
+          server-dir: ./
           dangerous-clean-slate: false
           exclude: |
             **/.git*
@@ -63,9 +64,14 @@ jobs:
             **/.github/**
             **/node_modules/**
             **/.env
-            **/permissions.json
-            **/date_sheet.json
-            **/admin_credentials.json
+            **/data/permissions.json
+            **/data/date_sheet.json
+            **/data/admin_credentials.json
             **/.deploy-backup/**
             **/server.log
             **/stderr.log
+
+      - name: Skip deploy (missing required FTP secrets)
+        if: ${{ steps.precheck.outputs.ready != 'true' }}
+        run: |
+          echo "Skipping FTP deploy. Missing secrets: ${{ steps.precheck.outputs.missing }}"

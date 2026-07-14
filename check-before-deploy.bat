@@ -71,7 +71,7 @@ echo.
 echo 3. [ ] You have SFTP/SSH access to Hostinger
 echo       - SFTP host, username, password
 echo.
-echo 4. [ ] Domain kidsrootsjand.com is pointing to server
+echo 4. [ ] Domain apexiumsschool.com is pointing to server
 echo       - Check DNS A record
 echo.
 echo 5. [ ] You have FileZilla or similar for SFTP upload
@@ -110,7 +110,7 @@ echo    - pm2 start app.js --name "school-crm"
 echo    - pm2 save
 echo.
 echo 3. Verify:
-echo    - Open https://kidsrootsjand.com
+echo    - Open https://apexiumsschool.com
 echo    - Check admin login works
 echo    - Monitor: pm2 logs school-crm
 echo.

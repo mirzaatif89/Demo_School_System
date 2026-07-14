@@ -1,15 +1,15 @@
-# Apexiums School System CRM API Reference
+# PESS JAND CRM API Reference
 
 Base URL:
 
 ```text
-https://kidsrootsjand.com
+https://apexiumsschool.com
 ```
 
 All JSON APIs are under:
 
 ```text
-https://kidsrootsjand.com/api
+https://apexiumsschool.com/api
 ```
 
 ## Auth
@@ -273,7 +273,7 @@ GET /health
 The backend also uses Socket.IO at the same domain:
 
 ```text
-https://kidsrootsjand.com
+https://apexiumsschool.com
 ```
 
 Common emitted events:

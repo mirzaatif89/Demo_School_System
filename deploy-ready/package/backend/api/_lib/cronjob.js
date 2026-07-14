@@ -62,7 +62,7 @@ async function sendBirthdayWhatsAppMessages(db, options = {}) {
         try {
             await sendWhatsAppMessage(
                 student,
-                `Happy Birthday ${student.fullName || 'Student'}! Best wishes from Apexiums School.`
+                `Happy Birthday ${student.fullName || 'Student'}! Best wishes from PESS JAND.`
             );
             result.sent += 1;
             sentToday.add(student.id);

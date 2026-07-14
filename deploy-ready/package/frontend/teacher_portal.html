@@ -6,7 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Teacher Portal</title>
     <link rel="icon" type="image/png" href="images/logo.png">
-    <link rel="stylesheet" href="style.css?v=20260708-apexiums-brand">
+    <link rel="stylesheet" href="style.css?v=20260627-welcome-logo">
+    <link rel="stylesheet" href="ai-chat.css">
     <script src="https://unpkg.com/lucide@latest"></script>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="auth.js?v=20260627-welcome-logo"></script>
@@ -1126,7 +1127,7 @@
 
 <body>
     <header class="teacher-portal-header">
-        <img class="portal-logo" src="images/logo.png" alt="Apexiums School System logo">
+        <img class="portal-logo" src="images/logo.png" alt="PESS JAND logo">
     </header>
     <main class="teacher-portal">
         <section class="profile-card">
@@ -1213,6 +1214,10 @@
                 <i data-lucide="message-square" width="16"></i>
                 Complains
             </button>
+            <button class="teacher-option-btn" type="button" data-teacher-panel="messagesPanel">
+                <i data-lucide="message-circle" width="16"></i>
+                Messages
+            </button>
             <button class="teacher-option-btn" type="button" data-teacher-panel="leavePanel">
                 <i data-lucide="calendar-minus" width="16"></i>
                 Apply for Leave
@@ -1268,6 +1273,11 @@
             <div class="notice-list" id="teacherComplaintHistory"></div>
         </section>
 
+        <section class="panel-card teacher-option-panel" id="messagesPanel">
+            <h3>Messages</h3>
+            <div class="notice-list" id="teacherMessageList"></div>
+        </section>
+
         <section class="panel-card teacher-option-panel" id="leavePanel">
             <h3>Apply for Leave</h3>
             <form id="teacherLeaveForm">
@@ -1303,6 +1313,7 @@
         </section>
     </main>
 
+    <script src="ai-chat.js"></script>
     <script>
         const API_BASE_URL = (() => {
             const isLocalhost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
@@ -2042,6 +2053,41 @@
             return teachers.find((teacher) => String(teacher.id) === String(loggedInUser?.id));
         }
 
+        function renderTeacherMessages(messages = []) {
+            const list = document.getElementById('teacherMessageList');
+            if (!list) return;
+            if (!messages.length) {
+                list.innerHTML = '<div class="empty-note">No messages received yet.</div>';
+                return;
+            }
+            list.innerHTML = messages.map((item) => `
+                <div class="list-item">
+                    <div class="list-item-top">
+                        <span>${escapeHtml(item.createdAtLabel || '')}</span>
+                        <span>${escapeHtml(item.subject || 'Message')}</span>
+                    </div>
+                    <div class="muted">${escapeHtml(item.senderName ? `From: ${item.senderName}` : 'School message')}</div>
+                    <div class="muted" style="white-space:pre-wrap;">${escapeHtml(item.body || '')}</div>
+                </div>
+            `).join('');
+        }
+
+        async function loadTeacherMessages() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/messages`, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok || !result?.success) {
+                    throw new Error(result?.message || 'Messages could not be loaded.');
+                }
+                renderTeacherMessages(result.messages || []);
+            } catch (error) {
+                console.warn('Teacher messages could not be loaded:', error.message);
+                renderTeacherMessages([]);
+            }
+        }
+
         async function loadTeacherProfile() {
             if (!loggedInUser || loggedInUser.role !== 'Teacher' || !authToken) {
                 window.location.replace('/login');
@@ -2055,11 +2101,13 @@
                 if (!response.ok) throw new Error('Unable to load teacher profile.');
                 const teacher = await response.json();
                 applyTeacherData(teacher);
+                await loadTeacherMessages();
                 await loadTeacherLeaveRequests();
             } catch (_error) {
                 const fallback = getTeacherFallback();
                 if (fallback) {
                     applyTeacherData(fallback);
+                    await loadTeacherMessages();
                     await loadTeacherLeaveRequests();
                     return;
                 }

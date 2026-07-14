@@ -1,66 +1,68 @@
-# GitHub Actions Auto Deploy
+# GitHub Auto Deploy (Push -> Live Update)
 
-Push to `main` will deploy this app to the live server through SSH.
+This setup makes live hosting auto-update whenever you push to `main`.
 
-## One-time server setup
+## 1) One-time server setup
 
-Create the live app folder on Hostinger/cPanel:
-
-```bash
-mkdir -p /home/<cpanel_user>/my_school_app
-cd /home/<cpanel_user>/my_school_app
-```
-
-Create production `.env` in that folder. Use `.env.example` values as a guide and set real DB/SMTP credentials.
-
-Required live `.env` keys:
+Run on your live server (SSH):
 
 ```bash
-NODE_ENV=production
-PORT=3000
-DB_HOST=localhost
-DB_PORT=3306
-DB_NAME=your_database
-DB_USER=your_database_user
-DB_PASSWORD=your_database_password
-JWT_SECRET=change_this_to_a_long_random_secret
+cd /home/<cpanel_user>
+mkdir -p my_school_app
+cd my_school_app
+git clone <your-repo-url> .
 ```
 
-## GitHub repository secrets
+Set your production `.env` in this same folder.
 
-In GitHub:
+In cPanel `Setup Node.js App`:
+- Application root: `/home/<cpanel_user>/my_school_app`
+- Startup file: `app.js`
 
-`Repo -> Settings -> Secrets and variables -> Actions -> New repository secret`
+## 2) Add GitHub Secrets
 
-Add these secrets:
+In GitHub repo: `Settings -> Secrets and variables -> Actions -> New repository secret`
 
-```text
-LIVE_HOST       Hostinger/cPanel SSH host, for example kidsrootsjand.com
-LIVE_PORT       SSH port, usually 22
-LIVE_USER       SSH username
-LIVE_SSH_KEY    Private SSH key text
-LIVE_APP_PATH   Live app folder, for example /home/<cpanel_user>/my_school_app
-```
+Add:
+- `LIVE_HOST` = server host (example: `example.com`)
+- `LIVE_PORT` = SSH port (usually `22`)
+- `LIVE_USER` = SSH username
+- `LIVE_SSH_KEY` = private SSH key content (full key text)
+- `LIVE_APP_PATH` = app path (example: `/home/<cpanel_user>/my_school_app`)
+- `LIVE_BRANCH` = `main` (optional; default is `main`)
 
-## Deploy flow
+## 3) What auto deploy does
 
-Commit and push from this app repo:
+Workflow file: `.github/workflows/deploy-live.yml`
+
+On each push to `main`, it:
+1. Connects to server via SSH
+2. Backs up these files before update:
+   - `.env`
+   - `permissions.json`
+   - `date_sheet.json`
+   - `admin_credentials.json` (if present)
+3. Pulls latest GitHub code (`git reset --hard origin/main`)
+4. Restores backed-up files
+5. Runs `npm ci --omit=dev` (or `npm install --omit=dev`)
+6. Restarts app using `tmp/restart.txt`
+
+This protects runtime settings and reduces data-loss risk during updates.
+
+## 4) Deployment flow
+
+Now your flow is:
 
 ```bash
-git add .github/workflows/deploy-live.yml .gitignore package.json package-lock.json docs/GITHUB_AUTO_DEPLOY.md
-git commit -m "Add GitHub Actions live deploy"
+git add .
+git commit -m "your update"
 git push origin main
 ```
 
-After push, GitHub Actions will:
+Then GitHub Actions deploys to live automatically.
 
-1. Build a tar archive of the app.
-2. Upload it to the server through SSH.
-3. Preserve live `.env`, `admin_credentials.json`, permissions files, logs, and uploads.
-4. Install production dependencies with `npm ci --omit=dev`.
-5. Run `npm run validate`.
-6. Restart with PM2 if available, otherwise touch `tmp/restart.txt` for cPanel Node.js.
+## 5) Important
 
-## Important
-
-Do not commit `.env`. Production secrets must stay only in GitHub Secrets or the live server `.env`.
+- Main data stays in MySQL, so code deploy should not remove students/fees.
+- Keep regular DB backups (daily recommended).
+- Do not store real production secrets in Git.

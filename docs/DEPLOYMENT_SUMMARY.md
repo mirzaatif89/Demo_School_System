@@ -94,5 +94,5 @@ https://your-backend.onrender.com
 
 ---
 
-Created by Apexiums System
+Created by PESS JAND
 Last updated: 2026

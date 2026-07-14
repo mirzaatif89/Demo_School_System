@@ -1,6 +1,6 @@
 # 🎯 DEPLOYMENT FILES - WHICH FILE READ KARO?
 
-**Happy-Day-Restore Branch ko kidsrootsjand.com par deploy karna hai!**
+**Happy-Day-Restore Branch ko apexiumsschool.com par deploy karna hai!**
 
 ---
 
@@ -196,7 +196,7 @@ A: STEP 8-9 in DEPLOYMENT_STEP_BY_STEP.md!
 
 ```
 Branch:      happy-day-restore ✅
-Domain:      kidsrootsjand.com ✅
+Domain:      apexiumsschool.com ✅
 Host:        Hostinger ✅
 Status:      Ready for deployment! 🚀
 Documentation: Complete ✅

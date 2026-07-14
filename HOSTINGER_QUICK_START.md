@@ -3,7 +3,7 @@
 ## 🎯 آپ کی معلومات | Your Details
 
 ```
-Domain:    kidsrootsjand.com
+Domain:    apexiumsschool.com
 Host:      Hostinger
 Type:      Node.js + MySQL Application
 Framework: Express.js
@@ -37,7 +37,7 @@ NODE_ENV=production
 ### Step 3: Upload Files (SFTP)
 ```bash
 Using FileZilla:
-- Connect to: sftp://your_username@kidsrootsjand.com
+- Connect to: sftp://your_username@apexiumsschool.com
 - Port: 22
 - Upload everything to: public_html/
 - Make sure .env file is included!
@@ -46,7 +46,7 @@ Using FileZilla:
 ### Step 4: Install & Start (SSH)
 ```bash
 # Connect via SSH
-ssh your_username@kidsrootsjand.com
+ssh your_username@apexiumsschool.com
 cd public_html
 
 # Install dependencies
@@ -62,8 +62,8 @@ pm2 save
 ### Step 5: Verify
 ```bash
 # Test in browser:
-https://kidsrootsjand.com
-https://kidsrootsjand.com/login
+https://apexiumsschool.com
+https://apexiumsschool.com/login
 ```
 
 ---
@@ -125,7 +125,7 @@ pm2 logs school-crm --lines 100
 ```
 In Hostinger:
 1. Login to cPanel
-2. Addon Domains → Add kidsrootsjand.com
+2. Addon Domains → Add apexiumsschool.com
 3. Point to: public_html
 4. AutoSSL: Enable (for HTTPS)
 5. Redirect HTTP to HTTPS: Yes
@@ -199,7 +199,7 @@ pm2 logs school-crm
 pm2 status
 
 # 3. SSH into server and check manually
-ssh your_username@kidsrootsjand.com
+ssh your_username@apexiumsschool.com
 cd public_html
 node app.js  # Test run
 ```
@@ -213,7 +213,7 @@ node app.js  # Test run
 ## ✅ DEPLOYMENT SUCCESS SIGNS
 
 When deployment is successful:
-- ✅ `https://kidsrootsjand.com` loads
+- ✅ `https://apexiumsschool.com` loads
 - ✅ Login page appears
 - ✅ Admin can login
 - ✅ No 502 errors
@@ -226,12 +226,12 @@ When deployment is successful:
 
 Your School CRM is now live at:
 ```
-https://kidsrootsjand.com
+https://apexiumsschool.com
 ```
 
 Access Admin:
 ```
-URL: https://kidsrootsjand.com/admin
+URL: https://apexiumsschool.com/admin
 Username: admin (default)
 Password: (check your .env)
 ```

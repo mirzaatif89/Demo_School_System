@@ -6,7 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student Portal - EduCore</title>
     <link rel="icon" type="image/png" href="images/logo.png">
-    <link rel="stylesheet" href="style.css?v=20260708-apexiums-brand">
+    <link rel="stylesheet" href="style.css?v=20260627-welcome-logo">
+    <link rel="stylesheet" href="ai-chat.css">
     <script src="https://unpkg.com/lucide@latest"></script>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -861,6 +862,29 @@
             margin-top: 0.9rem;
             border-top: 1px solid #d9ece9;
             padding-top: 0.9rem;
+        }
+
+        .portal-quiz-form[hidden] {
+            display: none;
+        }
+
+        .portal-quiz-start-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            margin-top: 0.85rem;
+            padding: 0.75rem;
+            border: 1px solid #d9ece9;
+            border-radius: 12px;
+            background: #f8fffe;
+        }
+
+        .portal-quiz-start-row span {
+            color: #475569;
+            font-size: 0.88rem;
+            font-weight: 700;
         }
 
         .portal-quiz-question {
@@ -2271,7 +2295,7 @@
 
 <body>
     <header class="portal-header">
-        <img class="portal-logo" src="images/logo.png" alt="Apexiums School System logo">
+        <img class="portal-logo" src="images/logo.png" alt="PESS JAND logo">
         <button class="portal-menu-btn" type="button" onclick="logout()" title="Logout" aria-label="Logout">
             <i data-lucide="log-out" width="16"></i>
             Logout
@@ -2437,6 +2461,9 @@
             <button type="button" class="student-action-btn" data-student-action-target="studentSubmitAssignmentSection">
                 <i data-lucide="upload"></i> Submit Assignment
             </button>
+            <button type="button" class="student-action-btn" data-student-action-target="studentMessagesSection">
+                <i data-lucide="message-circle"></i> Messages
+            </button>
             <button type="button" class="student-action-btn" data-student-action-target="studentComplaintSection">
                 <i data-lucide="message-square"></i> Complain Box
             </button>
@@ -2575,7 +2602,7 @@
                 </thead>
                 <tbody id="studentResultBody"></tbody>
             </table>
-            <div class="empty-note" id="studentResultEmpty">No result card has been added for you yet.</div>
+            <div class="empty-note" id="studentResultEmpty">No published result card is available for you yet.</div>
 
             <h4>Result History</h4>
             <table class="panel-table">
@@ -2590,7 +2617,7 @@
                 </thead>
                 <tbody id="studentResultHistoryBody"></tbody>
             </table>
-            <div class="empty-note" id="studentResultHistoryEmpty">No result history found.</div>
+            <div class="empty-note" id="studentResultHistoryEmpty">No published result history found.</div>
         </section>
 
         <section class="panel-card student-portal-section" id="studentLeaveSection" style="display:none; margin-bottom: 1.25rem;">
@@ -2727,6 +2754,12 @@
             </form>
         </section>
 
+        <section class="panel-card student-portal-section" id="studentMessagesSection" style="display:none; margin-bottom: 1.25rem;">
+            <h3>Messages</h3>
+            <div class="portal-content-list" id="studentMessageList"></div>
+            <div class="empty-note" id="studentMessageEmpty">No messages received yet.</div>
+        </section>
+
         <section class="panel-card student-portal-section complaint-panel-card" id="studentComplaintSection" style="display:none; margin-bottom: 1.25rem;">
             <h3>Complain Box</h3>
             <form id="studentComplaintForm">
@@ -2795,6 +2828,7 @@
     </div>
 
     <script src="auth.js?v=20260627-welcome-logo"></script>
+    <script src="ai-chat.js"></script>
     <script>
         const isLocalhost = window.location.hostname === 'localhost' ||
             window.location.hostname === '127.0.0.1' ||
@@ -2807,8 +2841,9 @@
         const STORAGE_KEY_TEACHERS = 'eduCore_teachers';
         const STORAGE_KEY_SETTINGS = 'eduCore_settings';
         const STORAGE_KEY_SPECIAL_NOTICES = 'eduCore_special_notices';
-        const RESULT_ARCHIVE_KEY = 'APEXIUMS_RESULT_CARD_ARCHIVE_V2';
-        const DATE_SHEET_KEY = 'APEXIUMS_DATE_SHEET_V1';
+        const RESULT_ARCHIVE_KEY = 'HORIZON_RESULT_CARD_ARCHIVE_V2';
+        const RESULT_PUBLISH_SCHEDULE_KEY = 'HORIZON_RESULT_PUBLISH_SCHEDULE_V1';
+        const DATE_SHEET_KEY = 'HORIZON_DATE_SHEET_V1';
         let loadedDateSheetRecord = null;
         const STUDENT_ATTENDANCE_KEY = 'eduCore_student_attendance';
         const STUDENT_PROFILE_CACHE_KEY = 'eduCore_student_profile';
@@ -2859,8 +2894,8 @@
         function getPortalBrandingSettings() {
             try {
                 return {
-                    schoolName: 'Apexiums School System',
-                    schoolTitle: 'Apexiums School System',
+                    schoolName: 'PESS JAND',
+                    schoolTitle: 'PESS JAND',
                     phone: '',
                     address: '',
                     schoolAddress: '',
@@ -2868,7 +2903,7 @@
                     ...(JSON.parse(localStorage.getItem(STORAGE_KEY_SETTINGS) || '{}') || {})
                 };
             } catch (_error) {
-                return { schoolName: 'Apexiums School System', schoolTitle: 'Apexiums School System', phone: '', address: '', schoolAddress: '', logoDataUrl: '' };
+                return { schoolName: 'PESS JAND', schoolTitle: 'PESS JAND', phone: '0340-5983088,03015060130,0572622364', email: 'pessabubakar65@gmail.com', address: '', schoolAddress: '', logoDataUrl: '' };
             }
         }
 
@@ -2968,7 +3003,7 @@
             `).join('');
             const logoMarkup = logoDataUrl
                 ? `<img class="logo" src="${logoDataUrl}" alt="School logo">`
-                : '<div class="logo-fallback">APEXIUMS<\/div>';
+                : '<div class="logo-fallback">HORIZON<\/div>';
 
             return `<!DOCTYPE html>
 <html lang="en">
@@ -3019,7 +3054,7 @@
             <\/thead>
             <tbody>${subjectBlocks}<\/tbody>
         <\/table>
-        <div class="footer">Apexiums School System<\/div>
+        <div class="footer">PESS JAND<\/div>
     <\/main>
 <\/body>
 <\/html>`;
@@ -3086,6 +3121,7 @@
         }
 
         function getStudentPortalFeeAmount(student = {}) {
+            if (student?.freeStudy === true || student?.freeStudy === 'true' || String(student?.zeroFeeReason || student?.freeStudyReason || '').trim()) return 0;
             return parseInt(student.monthlyFee || student.fee || 0, 10) || 0;
         }
 
@@ -3567,7 +3603,13 @@
                         </div>
                         <p>${escapeHtml(item.details || '-')}</p>
                         ${item.file?.dataUrl ? `<button type="button" class="portal-download-btn" onclick="downloadPortalAttachment('${escapeHtml(STUDENT_QUIZ_KEY)}', '${escapeHtml(item.id || '')}')"><i data-lucide="download" width="16"></i> Download ${escapeHtml(item.file.name || 'Quiz File')}</button>` : ''}
-                        ${questions.length ? renderStudentQuizForm(item) : '<div class="empty-note" style="margin-top:.8rem;">This quiz only has an attached file.</div>'}
+                        ${questions.length ? `
+                            <div class="portal-quiz-start-row">
+                                <span>${escapeHtml(questions.length)} question${questions.length === 1 ? '' : 's'} available. Start when you are ready.</span>
+                                <button type="button" class="btn btn-primary" onclick="startStudentQuiz('${escapeHtml(item.id || '')}')">Start Quiz</button>
+                            </div>
+                            ${renderStudentQuizForm(item, null, true)}
+                        ` : '<div class="empty-note" style="margin-top:.8rem;">This quiz only has an attached file.</div>'}
                     </article>
                 `;
                 }).join('');
@@ -3601,21 +3643,22 @@
             if (window.lucide) window.lucide.createIcons();
         }
 
-        function renderStudentQuizForm(quiz = {}, submission = null) {
+        function renderStudentQuizForm(quiz = {}, submission = null, startHidden = false) {
             const questions = Array.isArray(quiz.questions) ? quiz.questions : [];
             return `
-                <form class="portal-quiz-form" data-student-quiz-form="${escapeHtml(quiz.id || '')}">
+                <form class="portal-quiz-form" data-student-quiz-form="${escapeHtml(quiz.id || '')}" ${startHidden ? 'hidden' : ''}>
                     ${questions.map((question, questionIndex) => {
                         const submittedAnswer = Array.isArray(submission?.answers) ? submission.answers[questionIndex] : null;
                         const checkedRow = Array.isArray(submission?.checkedRows) ? submission.checkedRows[questionIndex] : null;
                         const correctOption = (question.options || [])[Number(question.correctIndex || 0)] || '-';
+                        const hasSubmittedAnswer = submission && submittedAnswer !== null && submittedAnswer !== undefined && submittedAnswer !== '';
                         return `
                             <div class="portal-quiz-question">
                                 <strong>${questionIndex + 1}. ${escapeHtml(question.text || 'Question')} (${escapeHtml(question.marks || 1)} mark${Number(question.marks || 1) === 1 ? '' : 's'})</strong>
                                 <div class="portal-quiz-options">
                                     ${(question.options || []).map((option, optionIndex) => `
                                         <label>
-                                            <input type="radio" name="quiz-${escapeHtml(quiz.id || '')}-q-${questionIndex}" value="${optionIndex}" ${Number(submittedAnswer) === optionIndex ? 'checked' : ''} ${submission ? 'disabled' : ''} required>
+                                            <input type="radio" name="quiz-${escapeHtml(quiz.id || '')}-q-${questionIndex}" value="${optionIndex}" ${hasSubmittedAnswer && Number(submittedAnswer) === optionIndex ? 'checked' : ''} ${submission ? 'disabled' : ''} required>
                                             <span>${escapeHtml(option)}</span>
                                         </label>
                                     `).join('')}
@@ -3627,6 +3670,15 @@
                     ${submission ? '' : `<button type="submit" class="btn btn-primary">Submit Quiz</button>`}
                 </form>
             `;
+        }
+
+        function startStudentQuiz(quizId = '') {
+            const form = Array.from(document.querySelectorAll('[data-student-quiz-form]'))
+                .find((item) => String(item.dataset.studentQuizForm || '') === String(quizId || ''));
+            if (!form) return;
+            form.hidden = false;
+            form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            form.querySelector('input[type="radio"]')?.focus();
         }
 
         function submitStudentQuiz(event) {
@@ -4580,6 +4632,15 @@
             }
         }
 
+        function loadResultPublishSchedules() {
+            try {
+                const schedules = JSON.parse(localStorage.getItem(RESULT_PUBLISH_SCHEDULE_KEY) || '[]');
+                return Array.isArray(schedules) ? schedules : [];
+            } catch (error) {
+                return [];
+            }
+        }
+
         function normalizeLoose(value) {
             return String(value || '').trim().toLowerCase();
         }
@@ -4607,6 +4668,21 @@
 
         function getResultRecordClass(record = {}, student = {}) {
             return record.studentGrade || record.classGrade || record.className || student.classGrade || '';
+        }
+
+        function getResultRecordCampus(record = {}, student = {}) {
+            return record.campusName || record.campus || student.campusName || '';
+        }
+
+        function isResultPublishedForStudent(record = {}, student = {}) {
+            const recordCampus = normalizeLoose(getResultRecordCampus(record, student));
+            const recordClass = normalizeResultClass(getResultRecordClass(record, student));
+            const today = new Date().toISOString().slice(0, 10);
+            const schedule = loadResultPublishSchedules().find((item) => (
+                normalizeLoose(item.campusName) === recordCampus &&
+                normalizeResultClass(item.classGrade) === recordClass
+            ));
+            return Boolean(schedule?.publishDate && schedule.publishDate <= today);
         }
 
         function getResultRecordRollCandidates(record = {}, student = {}) {
@@ -4643,6 +4719,7 @@
                 const belongsToStudent = identityCandidates.includes(recordLookup);
 
                 if (!belongsToStudent) return false;
+                if (!isResultPublishedForStudent(record, student)) return false;
                 if (lookupFilter && !identityCandidates.includes(lookupFilter) && recordName !== lookupFilter) return false;
                 if (dateFilter && getResultRecordDate(record) !== dateFilter) return false;
                 if (classFilter && normalizeResultClass(getResultRecordClass(record, student)) !== normalizeResultClass(classFilter)) return false;
@@ -4686,7 +4763,7 @@
                 historyEmpty.textContent = 'Select class and enter roll number to view result history.';
                 historyEmpty.style.display = 'block';
             }
-            if (resultEmpty) resultEmpty.textContent = 'Select class and enter roll number to view your result.';
+            if (resultEmpty) resultEmpty.textContent = 'Select class and enter roll number to view your published result.';
             studentResultHistory = [];
             applyStudentResult(null);
         }
@@ -4792,7 +4869,7 @@
                 rollNo: rollValue
             });
             if (!matches.length) {
-                alert('No saved result card was found for this class and roll number.');
+                alert('No published result card was found for this class and roll number.');
                 renderStudentResultHistory(student, {
                     classGrade: classValue,
                     rollNo: rollValue
@@ -4812,20 +4889,20 @@
             if (normalizedCampus.includes('ali')) {
                 return {
                     campusLabel: 'Ali campus',
-                    contactLine: 'Address: Chapri Road Jand | Phone: 03085259900'
+                    contactLine: 'Phone: 0340-5983088,03015060130,0572622364 | Email: pessabubakar65@gmail.com'
                 };
             }
 
             if (normalizedCampus.includes('fatima')) {
                 return {
                     campusLabel: 'Fatima campus',
-                    contactLine: 'Address: Nai Abadi | Phone: 03085259900'
+                    contactLine: 'Phone: 0340-5983088,03015060130,0572622364 | Email: pessabubakar65@gmail.com'
                 };
             }
 
             return {
                 campusLabel: 'Main branch',
-                contactLine: 'Address: Dekhni Road Jand | Phone: 03045259900'
+                contactLine: 'Phone: 0340-5983088,03015060130,0572622364 | Email: pessabubakar65@gmail.com'
             };
         }
 
@@ -5412,6 +5489,41 @@
             return students.find((student) => student.id === loggedInUser.id);
         }
 
+        function renderStudentMessages(messages = []) {
+            const list = document.getElementById('studentMessageList');
+            const empty = document.getElementById('studentMessageEmpty');
+            if (!list || !empty) return;
+            if (!messages.length) {
+                list.innerHTML = '';
+                empty.style.display = 'block';
+                return;
+            }
+            empty.style.display = 'none';
+            list.innerHTML = messages.map((item) => `
+                <div class="portal-content-item">
+                    <div class="portal-content-meta">${escapeHtml(item.createdAtLabel || '')}${item.senderName ? ` - ${escapeHtml(item.senderName)}` : ''}</div>
+                    <div class="portal-content-title">${escapeHtml(item.subject || 'Message')}</div>
+                    <p>${escapeHtml(item.body || '')}</p>
+                </div>
+            `).join('');
+        }
+
+        async function loadStudentMessages() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/messages`, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok || !result?.success) {
+                    throw new Error(result?.message || 'Messages could not be loaded.');
+                }
+                renderStudentMessages(result.messages || []);
+            } catch (error) {
+                console.warn('Student messages could not be loaded:', error.message);
+                renderStudentMessages([]);
+            }
+        }
+
         async function loadStudentProfile() {
             try {
                 const response = await fetch(`${API_BASE_URL}/student/me`, {
@@ -5429,6 +5541,7 @@
                 await loadExecutedDateSheet();
                 await mergeStudentFeePaymentsIntoMonthlyStore();
                 applyStudentData(student);
+                await loadStudentMessages();
                 await loadStudentLeaveRequests(student);
                 return;
             } catch (error) {
@@ -5440,6 +5553,7 @@
                     await loadExecutedDateSheet();
                     await mergeStudentFeePaymentsIntoMonthlyStore();
                     applyStudentData(fallbackStudent);
+                    await loadStudentMessages();
                     await loadStudentLeaveRequests(fallbackStudent);
                     return;
                 }

@@ -1,7 +1,7 @@
 # 🚀 Happy-Day-Restore Branch - Hostinger Deploy Guide
 ## Step-by-Step آسان طریقہ
 
-**Domain:** kidsrootsjand.com  
+**Domain:** apexiumsschool.com  
 **Branch:** happy-day-restore ✅ (aap already is par ho)
 
 ---
@@ -107,7 +107,7 @@ git push origin happy-day-restore
 # SSH mein login karo Hostinger par
 # PuTTY ya Command Prompt se:
 
-ssh your_username@kidsrootsjand.com
+ssh your_username@apexiumsschool.com
 
 # Jaao public_html mein
 cd public_html
@@ -126,7 +126,7 @@ git pull origin happy-day-restore
 
 2. **FileZilla mein login karo:**
    ```
-   Host:     sftp://your_username@kidsrootsjand.com
+   Host:     sftp://your_username@apexiumsschool.com
    Port:     22
    Username: your_username
    Password: your_password
@@ -151,7 +151,7 @@ git pull origin happy-day-restore
 
 ```bash
 # SSH mein login karo
-ssh your_username@kidsrootsjand.com
+ssh your_username@apexiumsschool.com
 
 # Password daalo
 
@@ -204,7 +204,7 @@ pm2 status
 ### Aapke browser mein:
 
 ```
-https://kidsrootsjand.com
+https://apexiumsschool.com
 ```
 
 ### Kya dikhna chahiye:
@@ -215,7 +215,7 @@ https://kidsrootsjand.com
 
 ### Admin Login:
 ```
-URL: https://kidsrootsjand.com/admin
+URL: https://apexiumsschool.com/admin
 Username: admin
 Password: admin123
 ```
@@ -237,7 +237,7 @@ pm2 status
 pm2 logs school-crm --lines 20
 
 # 3. Database connection test karo
-# Browser mein jaao: https://kidsrootsjand.com/admin
+# Browser mein jaao: https://apexiumsschool.com/admin
 # Login try karo
 
 # 4. Agar admin login successful ho toh:
@@ -259,7 +259,7 @@ pm2 logs school-crm --lines 20
 OR
 
 1. **cPanel -> "Let's Encrypt SSL"**
-2. **Select domain: kidsrootsjand.com**
+2. **Select domain: apexiumsschool.com**
 3. **"Issue"** button dabo
 4. **Done!**
 
@@ -271,7 +271,7 @@ OR
 
 ```bash
 # SSH login karo:
-ssh your_username@kidsrootsjand.com
+ssh your_username@apexiumsschool.com
 
 # App chal raha hai?
 pm2 status
@@ -344,8 +344,8 @@ pm2 logs school-crm --lines 50
 
 ```
 HOSTINGER LOGIN:
-- cPanel: https://kidsrootsjand.com/cpanel
-- SSH: ssh your_username@kidsrootsjand.com
+- cPanel: https://apexiumsschool.com/cpanel
+- SSH: ssh your_username@apexiumsschool.com
 
 DATABASE:
 - Name: school_system
@@ -353,10 +353,10 @@ DATABASE:
 - Host: localhost
 
 DOMAIN:
-- https://kidsrootsjand.com
+- https://apexiumsschool.com
 
 ADMIN:
-- URL: https://kidsrootsjand.com/admin
+- URL: https://apexiumsschool.com/admin
 - Username: admin
 - Password: admin123
 
@@ -393,7 +393,7 @@ PM2 COMMANDS:
 
 ```
 Browser mein:
-✅ https://kidsrootsjand.com load hota hai
+✅ https://apexiumsschool.com load hota hai
 ✅ CSS styling apply ho
 ✅ Admin login kaam karta hai
 ✅ Students/Classes data dikhe

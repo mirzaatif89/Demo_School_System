@@ -4,8 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bills - Apexiums School System</title>
-    <link rel="stylesheet" href="style.css?v=20260708-apexiums-brand">
+    <title>Bills - PESS JAND</title>
+    <link rel="icon" type="image/png" href="images/logo.png">
+    <link rel="stylesheet" href="style.css?v=20260603-kids-roots-jand-brand">
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         .bill-panel { background:#fff; border:1px solid var(--border-color); border-radius:12px; padding:1.25rem; box-shadow:var(--shadow-sm); margin-bottom:1.25rem; }
@@ -34,7 +35,7 @@
 <body>
     <div class="dashboard-container">
         <aside class="sidebar">
-            <div class="logo-section"><img class="sidebar-logo-img" src="images/logo.png" alt="Apexiums School System logo"></div>
+            <div class="logo-section"><img class="sidebar-logo-img" src="images/logo.png" alt="PESS JAND logo"></div>
             <nav class="nav-links">
                 <a href="dashboard.html" class="nav-item"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></a>
                 <a href="fees.html" class="nav-item"><i data-lucide="credit-card"></i><span>Fees</span></a>
@@ -120,8 +121,18 @@
         function saveBills(items) { localStorage.setItem(BILL_KEY, JSON.stringify(Array.isArray(items) ? items : [])); window.dispatchEvent(new Event('storage')); }
         function esc(value) { return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[char])); }
         function money(value) { return `PKR ${Math.round(Number(value || 0)).toLocaleString('en-PK')}`; }
+        function getBillSelectedCampus() {
+            if (typeof getGlobalCampusFilterForCurrentUser === 'function') return getGlobalCampusFilterForCurrentUser();
+            return String(localStorage.getItem('eduCore_dashboard_campus_filter') || 'all').trim() || 'all';
+        }
+        function billMatchesSelectedCampus(item) {
+            if (typeof recordMatchesGlobalCampus === 'function') return recordMatchesGlobalCampus(item);
+            const selectedCampus = getBillSelectedCampus();
+            if (!selectedCampus || selectedCampus === 'all') return true;
+            return String(item?.campusName || item?.branchName || item?.campus || 'Main Campus').trim().toLowerCase() === selectedCampus.toLowerCase();
+        }
         function renderBills() {
-            const bills = readBills().sort((a, b) => String(b.billDate || '').localeCompare(String(a.billDate || '')));
+            const bills = readBills().filter(billMatchesSelectedCampus).sort((a, b) => String(b.billDate || '').localeCompare(String(a.billDate || '')));
             const total = bills.reduce((sum, item) => sum + Number(item.amount || 0), 0);
             const paid = bills.filter((item) => item.status === 'Paid').reduce((sum, item) => sum + Number(item.amount || 0), 0);
             billTotal.innerText = money(total);
@@ -176,6 +187,7 @@
                 billDate: billDate.value,
                 status: billStatus.value,
                 notes: billNotes.value.trim(),
+                campusName: existing?.campusName || (getBillSelectedCampus() === 'all' ? '' : getBillSelectedCampus()),
                 createdAt: existing?.createdAt || new Date().toISOString(),
                 updatedAt: new Date().toISOString()
             };

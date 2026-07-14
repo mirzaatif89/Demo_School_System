@@ -90,10 +90,10 @@ ADMIN_PASSWORD=admin123
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_SECURE=false
-SMTP_USER=softwaredemo17@gmail.com
+SMTP_USER=pessabubakar65@gmail.com
 SMTP_PASS=melqyptsoeabtnlk
-SMTP_FROM_EMAIL=softwaredemo17@gmail.com
-SMTP_FROM_NAME=Apexiums School
+SMTP_FROM_EMAIL=pessabubakar65@gmail.com
+SMTP_FROM_NAME=PESS JAND
 
 # Principal Account
 PRINCIPAL_USERNAME=principal@school.com

@@ -1,7 +1,7 @@
 const path = require('path');
 
 const SCHOOL_LOGO_CID = 'school-logo';
-const DEFAULT_SCHOOL_NAME = 'Apexiums School';
+const DEFAULT_SCHOOL_NAME = 'PESS JAND';
 
 function escapeHtml(value) {
     return String(value ?? '')

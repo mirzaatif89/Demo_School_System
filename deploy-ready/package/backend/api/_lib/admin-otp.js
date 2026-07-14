@@ -79,7 +79,7 @@ async function saveAdminCredentials(db, credentials = {}) {
 }
 
 function getAdminRecoveryEmail() {
-    return String(process.env.ADMIN_RECOVERY_EMAIL || process.env.SMTP_USER || process.env.SMTP_FROM_EMAIL || 'softwaredemo17@gmail.com').trim();
+    return String(process.env.ADMIN_RECOVERY_EMAIL || process.env.SMTP_USER || process.env.SMTP_FROM_EMAIL || 'pessabubakar65@gmail.com').trim();
 }
 
 function maskEmail(value = '') {

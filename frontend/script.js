@@ -32,6 +32,7 @@ const BACKEND_URL = isLocalhost
     : (window.ENV_BACKEND_URL || window.location.origin);
 
 const API_BASE_URL = `${BACKEND_URL}/api`;
+const TRANSIENT_HTTP_STATUSES = new Set([403, 408, 429, 500, 502, 503, 504]);
 let socket;
 let activePortalSessionsCache = [];
 let dashboardActiveSessionsInterval = null;
@@ -144,7 +145,50 @@ function toRoutePath(pageName = '') {
     }
     const normalizedPage = normalizeClientPageName(pageName);
     if (normalizedPage === 'index.html') return '/';
+    if (normalizedPage === 'login.html') return '/login';
     return normalizedPage;
+}
+
+function delay(ms) {
+    return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function fetchWithRetry(url, options = {}, retryOptions = {}) {
+    const retries = Number.isFinite(retryOptions.retries) ? retryOptions.retries : 2;
+    const timeoutMs = Number.isFinite(retryOptions.timeoutMs) ? retryOptions.timeoutMs : 15000;
+    let lastError = null;
+
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+        const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        const timeoutId = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : null;
+
+        try {
+            const response = await fetch(url, {
+                cache: 'no-store',
+                ...options,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    ...(options.headers || {})
+                },
+                ...(controller ? { signal: controller.signal } : {})
+            });
+
+            if (attempt < retries && TRANSIENT_HTTP_STATUSES.has(response.status)) {
+                await delay(500 * (attempt + 1));
+                continue;
+            }
+
+            return response;
+        } catch (error) {
+            lastError = error;
+            if (attempt >= retries) break;
+            await delay(500 * (attempt + 1));
+        } finally {
+            if (timeoutId) window.clearTimeout(timeoutId);
+        }
+    }
+
+    throw lastError || new Error('Request failed.');
 }
 
 (function installAppPopups() {
@@ -345,7 +389,7 @@ async function syncToSQLDetailed(endpoint, data) {
     try {
         const token = sessionStorage.getItem('eduCore_token') || '';
         console.log(`Syncing ${endpoint}: Sending ${Array.isArray(data) ? data.length : 1} items`);
-        
+
         const response = await fetch(`${API_BASE_URL}/${endpoint}`, {
             method: 'POST',
             headers: {
@@ -356,7 +400,7 @@ async function syncToSQLDetailed(endpoint, data) {
         });
 
         console.log(`API response status for ${endpoint}: ${response.status}`);
-        
+
         const result = await parseJsonResponse(response, 'Server sync failed.');
 
         if (!response.ok || result?.success === false) {
@@ -439,26 +483,26 @@ async function initialSQLSync() {
 async function refreshStudentsFromSQL() {
     const token = sessionStorage.getItem('eduCore_token') || '';
     console.log('Fetching students from SQL API...');
-    
+
     const response = await fetch(`${API_BASE_URL}/students`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
     });
-    
+
     console.log(`API response status: ${response.status}`);
-    
+
     const result = await parseJsonResponse(response, 'Students could not be loaded.');
-    
+
     if (!response.ok || !Array.isArray(result)) {
         throw new Error(result?.message || result?.error || 'Students could not be loaded.');
     }
-    
+
     console.log(`API returned ${Array.isArray(result) ? result.length : 0} students`);
-    
+
     const mergedStudents = getLoggedInUser()?.role === 'Branch'
         ? getCurrentUserScopedRecords(result)
         : mergeStudentRecords(result, { preserveLocalOnly: false });
     console.log(`After merge: ${mergedStudents.length} students total`);
-    
+
     localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(mergedStudents));
     return mergedStudents;
 }
@@ -811,11 +855,11 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.disabled = true;
 
             try {
-                const response = await fetch(`${API_BASE_URL}/login`, {
+                const response = await fetchWithRetry(`${API_BASE_URL}/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username, password })
-                });
+                }, { retries: 2, timeoutMs: 15000 });
 
                 const responseText = await response.text();
                 let result = null;
@@ -847,10 +891,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     loginTracking.count += 1;
                     loginTracking.lastLogin = new Date().toISOString();
                      localStorage.setItem('EDUCORE_LOGIN_TRACKING', JSON.stringify(loginTracking));
- 
+
                      pushNotification('System Access', `${result.user.role} logged in: ${result.user.fullName}`, 'login');
                     queueWelcomeAnimationForNextPage(result.user);
- 
+
                      btn.innerText = 'Redirecting...';
 
                     const getDefaultRoleHome = () => {
@@ -886,9 +930,11 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (error) {
                 console.error("Login Error:", error);
 
-                let errorMsg = error.message;
-                if (error.message === 'Failed to fetch' || error.name === 'TypeError') {
-                    errorMsg = "🔴 Connection Failed! Please ensure the Backend Server is running.\n\nRun 'node server.js' in your terminal.";
+                let errorMsg = error.message || 'Login failed.';
+                if (error.message === 'Failed to fetch' || error.name === 'TypeError' || error.name === 'AbortError') {
+                    errorMsg = 'Connection failed. Please check your internet and try again. If this continues after redeploy, restart the Node.js app from cPanel.';
+                } else if (/^403\b|forbidden/i.test(errorMsg)) {
+                    errorMsg = 'Request was blocked by the server. Please try again once. If it continues, restart the Node.js app from cPanel and confirm the domain points to this app folder.';
                 }
 
                 alert(errorMsg);
@@ -1248,10 +1294,11 @@ function escapeHtml(value) {
 
 function getBrandingSettings() {
     const fallback = {
-        schoolName: 'Apexiums School System',
-        schoolTitle: 'Apexiums School System',
+        schoolName: 'PESS JAND',
+        schoolTitle: 'PESS JAND',
         session: '',
-        phone: '',
+        phone: '0340-5983088,03015060130,0572622364',
+        email: 'pessabubakar65@gmail.com',
         address: '',
         schoolAddress: '',
         logoDataUrl: ''
@@ -2224,12 +2271,12 @@ function queueWelcomeAnimationForNextPage(user) {
     try {
         const displayName = user?.fullName || user?.username || user?.role || 'User';
         const role = user?.role || 'User';
-        let schoolName = 'Apexiums School System';
+        let schoolName = 'PESS JAND';
         try {
             const settings = JSON.parse(localStorage.getItem('eduCore_settings') || '{}') || {};
             schoolName = String(settings.schoolName || settings.schoolTitle || schoolName).trim() || schoolName;
         } catch (_error) {
-            schoolName = 'Apexiums School System';
+            schoolName = 'PESS JAND';
         }
         sessionStorage.setItem(
             EDUCORE_WELCOME_SESSION_KEY,
@@ -2275,11 +2322,11 @@ function showWelcomeAnimationIfNeeded() {
     const schoolName = String(payload.schoolName || (() => {
         try {
             const settings = JSON.parse(localStorage.getItem('eduCore_settings') || '{}') || {};
-            return settings.schoolName || settings.schoolTitle || 'Apexiums School System';
+            return settings.schoolName || settings.schoolTitle || 'PESS JAND';
         } catch (_error) {
-            return 'Apexiums School System';
+            return 'PESS JAND';
         }
-    })()).trim() || 'Apexiums School System';
+    })()).trim() || 'PESS JAND';
     const escape = typeof escapeSessionText === 'function' ? escapeSessionText : (value) => String(value ?? '');
 
     overlay.innerHTML = `
@@ -2483,10 +2530,26 @@ function isSidebarItemVisible(navLinks, item) {
         itemRect.left >= navRect.left && itemRect.right <= navRect.right;
 }
 
+function centerSidebarItem(navLinks, item) {
+    if (!navLinks || !item) return;
+    const navRect = navLinks.getBoundingClientRect();
+    const itemRect = item.getBoundingClientRect();
+
+    if (itemRect.width && navRect.width && navLinks.scrollWidth > navLinks.clientWidth) {
+        const itemCenter = itemRect.left - navRect.left + navLinks.scrollLeft + (itemRect.width / 2);
+        navLinks.scrollLeft = Math.max(0, itemCenter - (navLinks.clientWidth / 2));
+    }
+
+    if (itemRect.height && navRect.height && navLinks.scrollHeight > navLinks.clientHeight) {
+        const itemCenter = itemRect.top - navRect.top + navLinks.scrollTop + (itemRect.height / 2);
+        navLinks.scrollTop = Math.max(0, itemCenter - (navLinks.clientHeight / 2));
+    }
+}
+
 function keepActiveSidebarItemVisible(navLinks) {
     const activeItem = getActiveSidebarItem(navLinks);
     if (!activeItem || isSidebarItemVisible(navLinks, activeItem)) return;
-    activeItem.scrollIntoView({ block: 'center', inline: 'nearest' });
+    centerSidebarItem(navLinks, activeItem);
 }
 
 let sidebarScrollRestoreUntil = 0;
@@ -2568,6 +2631,11 @@ function restoreSidebarScrollPosition(savedPosition = readSidebarScrollPosition(
                 navLinks.getBoundingClientRect().top -
                 Number(savedPosition.itemTop);
             navLinks.scrollLeft = Number(savedPosition.left) || 0;
+            return;
+        }
+
+        if (targetLink) {
+            centerSidebarItem(navLinks, targetLink);
             return;
         }
 
@@ -2900,7 +2968,7 @@ function ensureResetDataNav() {
 }
 
 function clearLocalSystemData() {
-    const prefixes = ['eduCore_', 'EDUCORE_', 'APEXIUMS_'];
+    const prefixes = ['eduCore_', 'EDUCORE_', 'HORIZON_'];
     const exactKeys = new Set([
         STORAGE_KEY_STUDENTS,
         STORAGE_KEY_TEACHERS,
@@ -3367,6 +3435,7 @@ function renderAdminSidebarSequence() {
     });
 
     if (window.lucide) window.lucide.createIcons();
+    keepActiveSidebarItemVisible(navLinks);
 }
 
 function ensureSchedulingNav() {
@@ -3987,6 +4056,21 @@ function saveBills(bills) {
     localStorage.setItem(STORAGE_KEY_BILLS, JSON.stringify(bills));
 }
 
+function getScopedBills() {
+    const bills = getBills();
+    return typeof getGlobalCampusFilteredRecords === 'function' ? getGlobalCampusFilteredRecords(bills) : bills;
+}
+
+function getCurrentBillCampusName(existing = {}) {
+    if (existing?.campusName || existing?.branchName || existing?.campus) {
+        return existing.campusName || existing.branchName || existing.campus;
+    }
+    const selectedCampus = typeof getGlobalCampusFilterForCurrentUser === 'function'
+        ? getGlobalCampusFilterForCurrentUser()
+        : (localStorage.getItem('eduCore_dashboard_campus_filter') || 'all');
+    return selectedCampus === 'all' ? '' : selectedCampus;
+}
+
 let isHistoryView = false;
 
 // Function called when a card is clicked
@@ -4066,7 +4150,7 @@ function renderFinance(term = '') {
         return;
     }
 
-    const bills = getBills();
+    const bills = getScopedBills();
     let filtered = [];
 
     if (isHistoryView) {
@@ -4209,6 +4293,7 @@ document.addEventListener('submit', function (e) {
         const idField = document.getElementById('billId');
         const isEdit = idField.value !== '';
 
+        const existingBill = isEdit ? getBills().find(b => b.id === idField.value) : null;
         const newBill = {
             id: isEdit ? idField.value : generateUniqueRecordId('BILL'),
             category: currentCategory,
@@ -4216,6 +4301,7 @@ document.addEventListener('submit', function (e) {
             date: document.getElementById('billDate').value,
             status: document.getElementById('billStatus').value,
             note: document.getElementById('billNote').value,
+            campusName: getCurrentBillCampusName(existingBill),
             invoice: document.getElementById('invoiceImgPreview').src || null
         };
 
@@ -4330,7 +4416,16 @@ function formatDashboardCurrency(amount) {
     return `PKR ${Math.round(value).toLocaleString('en-PK')}`;
 }
 
+function isFreeStudyStudent(student = {}) {
+    return (
+        student?.freeStudy === true ||
+        student?.freeStudy === 'true' ||
+        String(student?.zeroFeeReason || student?.freeStudyReason || '').trim()
+    );
+}
+
 function getDashboardStudentFee(student = {}) {
+    if (isFreeStudyStudent(student)) return 0;
     const studentFeeRaw = String(student?.monthlyFee ?? student?.fee ?? '').trim();
     const studentFee = Number(studentFeeRaw || 0) || 0;
     const hasManualFee = studentFee > 0 && (student?.monthlyFeeCustom === true || student?.monthlyFeeCustom === 'true');
@@ -4356,6 +4451,36 @@ function getDashboardStudentFee(student = {}) {
 
 function getCurrentDashboardFeeMonth() {
     return new Date().toLocaleString('en-US', { month: 'long' });
+}
+
+function getCurrentDashboardFeeMonthKey() {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getDashboardPaymentMonthKeys(value = '') {
+    const raw = String(value || '').trim();
+    if (!raw) return [];
+
+    const exactMonth = raw.match(/^(\d{4})-(\d{2})$/);
+    if (exactMonth) return [`${exactMonth[1]}-${exactMonth[2]}`];
+
+    const parsed = new Date(raw.replace(',', ' 1,'));
+    if (!Number.isNaN(parsed.getTime())) {
+        return [`${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}`];
+    }
+
+    const monthNames = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    const lowered = raw.toLowerCase();
+    const yearMatch = lowered.match(/\b(20\d{2})\b/);
+    const fallbackYear = yearMatch ? Number(yearMatch[1]) : new Date().getFullYear();
+    return monthNames
+        .map((month, index) => ({ month, index }))
+        .filter(({ month }) => lowered.includes(month.toLowerCase()) || lowered.includes(month.slice(0, 3).toLowerCase()))
+        .map(({ index }) => `${fallbackYear}-${String(index + 1).padStart(2, '0')}`);
 }
 
 function getDashboardFeeStatusRevenue(students = []) {
@@ -4398,6 +4523,53 @@ function getDashboardFeeStatusRevenue(students = []) {
 
         return summary;
     }, { total: 0, paidStudents: 0, month: currentMonth });
+}
+
+async function getDashboardBackendFeeStatusRevenue(students = []) {
+    const currentMonth = getCurrentDashboardFeeMonth();
+    const currentMonthKey = getCurrentDashboardFeeMonthKey();
+    const studentList = Array.isArray(students) ? students : [];
+    const studentMap = new Map(studentList.map((student) => [String(student?.id || ''), student]));
+    const rollMap = new Map(studentList
+        .filter((student) => String(student?.rollNo || '').trim())
+        .map((student) => [String(student.rollNo).trim().toLowerCase(), student]));
+    const nameRollMap = new Map(studentList
+        .filter((student) => String(student?.fullName || '').trim() || String(student?.rollNo || '').trim())
+        .map((student) => [
+            `${String(student.fullName || '').trim().toLowerCase()}|${String(student.rollNo || '').trim().toLowerCase()}|${String(student.classGrade || '').trim().toLowerCase()}`,
+            student
+        ]));
+    const summary = { total: 0, paidStudents: 0, month: currentMonth };
+    const paidStudentIds = new Set();
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/fees/payments`);
+        const result = await parseJsonResponse(response, 'Fee payments could not be loaded.');
+        if (!response.ok || result?.success === false) throw new Error(result?.message || 'Fee payments could not be loaded.');
+        const payments = Array.isArray(result?.payments) ? result.payments : [];
+
+        payments.forEach((payment) => {
+            const status = String(payment?.status || '').toLowerCase();
+            if (!['paid', 'partial'].includes(status)) return;
+            const studentId = String(payment?.studentId || '');
+            const matchedStudent = studentMap.get(studentId) ||
+                rollMap.get(String(payment?.rollNo || '').trim().toLowerCase()) ||
+                nameRollMap.get(`${String(payment?.studentName || '').trim().toLowerCase()}|${String(payment?.rollNo || '').trim().toLowerCase()}|${String(payment?.classGrade || '').trim().toLowerCase()}`);
+            if (!matchedStudent) return;
+            const monthKeys = getDashboardPaymentMonthKeys(payment?.feeMonth || '');
+            if (monthKeys.length && !monthKeys.includes(currentMonthKey)) return;
+            const amount = Math.max(Number(payment?.amount || 0), 0);
+            if (!(amount > 0)) return;
+            summary.total += amount / Math.max(monthKeys.length || 1, 1);
+            paidStudentIds.add(String(matchedStudent.id || studentId || `${payment?.studentName || ''}|${payment?.rollNo || ''}`));
+        });
+
+        summary.paidStudents = paidStudentIds.size;
+        return summary;
+    } catch (error) {
+        console.warn('Dashboard fee payments could not be loaded:', error.message);
+        return null;
+    }
 }
 
 function getDashboardCampusKey(value = '') {
@@ -4459,7 +4631,7 @@ async function populateDashboardCampusFilter() {
     }
 }
 
-function updateDashboardRevenueStats(studentsForDashboard) {
+async function updateDashboardRevenueStats(studentsForDashboard) {
     const amountEl = document.getElementById('dashRevenue');
     const detailEl = document.getElementById('dashRevenueDetail');
     if (!amountEl && !detailEl) return;
@@ -4467,7 +4639,9 @@ function updateDashboardRevenueStats(studentsForDashboard) {
     const students = Array.isArray(studentsForDashboard)
         ? studentsForDashboard
         : getDashboardCampusFilteredRecords(getArrayData(STORAGE_KEY_STUDENTS));
-    const feeSummary = getDashboardFeeStatusRevenue(students);
+    const localSummary = getDashboardFeeStatusRevenue(students);
+    const backendSummary = await getDashboardBackendFeeStatusRevenue(students);
+    const feeSummary = backendSummary && backendSummary.total > 0 ? backendSummary : localSummary;
     const selectedCampus = getSelectedDashboardCampus();
     const campusLabel = selectedCampus === 'all' ? '' : ` in ${selectedCampus}`;
 
@@ -5017,11 +5191,12 @@ function applyClassFeeToLocalStudents(className = '', monthlyFee = '', feeFreque
         if (normalizeClassFeeKey(student?.classGrade || '') !== selectedKey) return student;
         const studentFee = String(student?.monthlyFee ?? '').trim();
         const studentFeeAmount = Number(studentFee || 0) || 0;
+        const isFreeStudy = typeof isFreeStudyStudent === 'function' && isFreeStudyStudent(student);
         const hasCustomFee = studentFeeAmount > 0 && (
             student?.monthlyFeeCustom === true ||
             student?.monthlyFeeCustom === 'true' ||
             (previousClassFee && studentFee !== previousClassFee)
-        );
+        ) || isFreeStudy;
         if (hasCustomFee) return student;
         changed = true;
         return {
@@ -5039,11 +5214,21 @@ function applyClassFeeToLocalStudents(className = '', monthlyFee = '', feeFreque
 function bindStudentClassFeeAutoFill() {
     const classSelect = document.getElementById('classGrade');
     const monthlyFeeInput = document.getElementById('monthlyFee');
+    const remainingAmountInput = document.getElementById('remainingAmount');
+    const zeroFeeReasonInput = document.getElementById('zeroFeeReason');
     if (!classSelect || classSelect.dataset.classFeeBound === '1') return;
     classSelect.dataset.classFeeBound = '1';
     classSelect.addEventListener('change', refreshStudentClassFeeAutoFill);
     monthlyFeeInput?.addEventListener('input', () => {
         monthlyFeeInput.dataset.autoClassFee = '0';
+    });
+    zeroFeeReasonInput?.addEventListener('input', () => {
+        if (!String(zeroFeeReasonInput.value || '').trim()) return;
+        if (monthlyFeeInput) {
+            monthlyFeeInput.value = '0';
+            monthlyFeeInput.dataset.autoClassFee = '0';
+        }
+        if (remainingAmountInput) remainingAmountInput.value = '0';
     });
 }
 
@@ -5089,30 +5274,42 @@ function isStudentMonthlyFeeCustom(className = '', monthlyFee = '') {
     return enteredAmount !== Number(classFee);
 }
 
-function resolveStudentMonthlyFeeForSave(className = '', monthlyFee = '') {
+function resolveStudentMonthlyFeeForSave(className = '', monthlyFee = '', zeroFeeReason = '') {
     const feeDefault = getClassFeeDefault(className);
     const enteredFee = String(monthlyFee ?? '').trim();
     const enteredAmount = Number(enteredFee || 0) || 0;
+    const freeReason = String(zeroFeeReason || '').trim();
     const classFee = String(feeDefault?.monthlyFee ?? '').trim();
     const classAmount = Number(classFee || 0) || 0;
+    if (freeReason) {
+        return {
+            monthlyFee: '0',
+            monthlyFeeCustom: true,
+            feeFrequency: feeDefault?.feeFrequency || 'Monthly',
+            freeStudy: true
+        };
+    }
     if (enteredAmount > 0) {
         return {
             monthlyFee: String(enteredAmount),
             monthlyFeeCustom: classAmount > 0 ? enteredAmount !== classAmount : true,
-            feeFrequency: feeDefault?.feeFrequency || 'Monthly'
+            feeFrequency: feeDefault?.feeFrequency || 'Monthly',
+            freeStudy: false
         };
     }
     if (classAmount > 0) {
         return {
             monthlyFee: String(classAmount),
             monthlyFeeCustom: false,
-            feeFrequency: feeDefault?.feeFrequency || 'Monthly'
+            feeFrequency: feeDefault?.feeFrequency || 'Monthly',
+            freeStudy: false
         };
     }
     return {
         monthlyFee: '0',
-        monthlyFeeCustom: false,
-        feeFrequency: feeDefault?.feeFrequency || 'Monthly'
+        monthlyFeeCustom: Boolean(freeReason),
+        feeFrequency: feeDefault?.feeFrequency || 'Monthly',
+        freeStudy: Boolean(freeReason)
     };
 }
 
@@ -5414,6 +5611,7 @@ async function handleStudentFormSubmit(e) {
     let studentPasswordInput = document.getElementById('studentPassword').value;
     const monthlyFeeInput = document.getElementById('monthlyFee') ? document.getElementById('monthlyFee').value : '';
     const remainingAmountInput = document.getElementById('remainingAmount') ? document.getElementById('remainingAmount').value : '';
+    const zeroFeeReasonInput = document.getElementById('zeroFeeReason') ? document.getElementById('zeroFeeReason').value.trim() : '';
     const studentEmailInput = document.getElementById('studentEmail') ? document.getElementById('studentEmail').value.trim().toLowerCase() : '';
     const guardianName = document.getElementById('guardianName')?.value.trim() || '';
     const guardianContact = document.getElementById('guardianContact')?.value.trim() || '';
@@ -5490,10 +5688,21 @@ async function handleStudentFormSubmit(e) {
     const matchedFamilyAddedAt = relationFamilyMatch?.createdAt || getFamilies().find((family) => String(family.id || '') === String(familyId || ''))?.createdAt || '';
     await loadClassFeeDefaults();
     const selectedClassGrade = document.getElementById('classGrade').value;
-    const resolvedFee = resolveStudentMonthlyFeeForSave(selectedClassGrade, monthlyFeeInput);
+    const resolvedFee = resolveStudentMonthlyFeeForSave(selectedClassGrade, monthlyFeeInput, zeroFeeReasonInput);
+    if (Number(resolvedFee.monthlyFee || 0) <= 0 && !zeroFeeReasonInput) {
+        alert('Please enter the reason why this student has zero fee / free study.');
+        document.getElementById('zeroFeeReason')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        document.getElementById('zeroFeeReason')?.focus();
+        return;
+    }
+    const effectiveFeeStatus = resolvedFee.freeStudy === true ? 'Zero Fee Student' : currentStatus;
+    const effectiveRemainingAmount = resolvedFee.freeStudy === true ? '0' : (remainingAmountInput || '0');
     if (document.getElementById('monthlyFee') && resolvedFee.monthlyFeeCustom === false && Number(monthlyFeeInput || 0) <= 0) {
         document.getElementById('monthlyFee').value = resolvedFee.monthlyFee;
         document.getElementById('monthlyFee').dataset.autoClassFee = '1';
+    } else if (document.getElementById('monthlyFee') && resolvedFee.freeStudy === true) {
+        document.getElementById('monthlyFee').value = '0';
+        document.getElementById('monthlyFee').dataset.autoClassFee = '0';
     }
 
     try {
@@ -5531,11 +5740,13 @@ async function handleStudentFormSubmit(e) {
                 ? existingStudent.familyAddedAt || new Date().toISOString()
                 : matchedFamilyAddedAt || new Date().toISOString()
         ) : '',
-        feesStatus: currentStatus,
+        feesStatus: effectiveFeeStatus,
         enrollmentStatus,
         monthlyFee: resolvedFee.monthlyFee,
         monthlyFeeCustom: resolvedFee.monthlyFeeCustom,
-        remainingAmount: remainingAmountInput || '0',
+        freeStudy: resolvedFee.freeStudy === true,
+        zeroFeeReason: resolvedFee.freeStudy === true ? zeroFeeReasonInput : '',
+        remainingAmount: effectiveRemainingAmount,
         feeFrequency: document.getElementById('feeFrequency') ? (document.getElementById('feeFrequency').value || resolvedFee.feeFrequency) : resolvedFee.feeFrequency,
         createdAt: existingStudent?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -5546,8 +5757,8 @@ async function handleStudentFormSubmit(e) {
     };
 
     // Auto-set payment date if status is Paid
-    if (currentStatus === 'Paid') {
-        if (existingStudent && existingStudent.feesStatus === 'Paid' && existingStudent.paymentDate) {
+    if (effectiveFeeStatus === 'Paid' || effectiveFeeStatus === 'Zero Fee Student') {
+        if (existingStudent && ['Paid', 'Zero Fee Student'].includes(existingStudent.feesStatus) && existingStudent.paymentDate) {
             newStudent.paymentDate = existingStudent.paymentDate;
         } else {
             newStudent.paymentDate = new Date().toLocaleDateString();
@@ -5679,9 +5890,9 @@ function printStudentAdmissionFormFromEncoded(encodedPayload) {
 function getEmailSchoolName() {
     try {
         const branding = typeof getBrandingSettings === 'function' ? getBrandingSettings() : {};
-        return String(branding.schoolName || branding.schoolTitle || 'Apexiums School System').trim() || 'Apexiums School System';
+        return String(branding.schoolName || branding.schoolTitle || 'PESS JAND').trim() || 'PESS JAND';
     } catch (_error) {
-        return 'Apexiums School System';
+        return 'PESS JAND';
     }
 }
 
@@ -5765,6 +5976,32 @@ async function sendStaffCustomEmailFromEncoded(encodedPayload) {
     return sendCustomEmailToRecord(staffMember, 'Staff member');
 }
 
+function openIndividualMessageFromEncoded(encodedPayload, role) {
+    const person = decodeRowPayload(encodedPayload);
+    const recipientId = String(person?.id || person?.studentCode || person?.employeeCode || person?.username || '').trim();
+    const prefill = {
+        role,
+        scope: 'individual',
+        recipientId,
+        recipientName: String(person?.fullName || person?.name || person?.username || '').trim(),
+        campusName: String(person?.campusName || person?.branchName || person?.campus || '').trim(),
+        classGrade: String(person?.classGrade || '').trim()
+    };
+    try {
+        sessionStorage.setItem('eduCore_message_prefill', JSON.stringify(prefill));
+    } catch (_error) {}
+
+    const params = new URLSearchParams({
+        role,
+        scope: 'individual'
+    });
+    if (recipientId) params.set('recipientId', recipientId);
+    if (prefill.recipientName) params.set('recipientName', prefill.recipientName);
+    if (prefill.campusName) params.set('campusName', prefill.campusName);
+    if (prefill.classGrade) params.set('classGrade', prefill.classGrade);
+    window.location.href = `messages.html?${params.toString()}`;
+}
+
 function handleStudentActionSelect(selectElement, encodedPayload, studentId, isBranchUser = 0) {
     const action = String(selectElement?.value || '').trim().toLowerCase();
     if (!action) return;
@@ -5783,6 +6020,11 @@ function handleStudentActionSelect(selectElement, encodedPayload, studentId, isB
 
     if (action === 'email') {
         sendStudentCustomEmailFromEncoded(encodedPayload);
+        return;
+    }
+
+    if (action === 'message') {
+        openIndividualMessageFromEncoded(encodedPayload, 'Student');
         return;
     }
 
@@ -5844,6 +6086,11 @@ function handleTeacherActionSelect(selectElement, encodedPayload, teacherId) {
 
     if (action === 'email') {
         sendTeacherCustomEmailFromEncoded(encodedPayload);
+        return;
+    }
+
+    if (action === 'message') {
+        openIndividualMessageFromEncoded(encodedPayload, 'Teacher');
         return;
     }
 
@@ -6095,7 +6342,7 @@ function parseStudentQuickFilterValues(values) {
 function isStudentZeroFee(student) {
     const remaining = Number(student?.remainingAmount || student?.dueBalance || student?.balance || 0) || 0;
     const feeStatus = String(student?.feesStatus || '').trim().toLowerCase();
-    return feeStatus === 'paid' && remaining === 0;
+    return feeStatus === 'zero fee student' || student?.freeStudy === true || student?.freeStudy === 'true' || (feeStatus === 'paid' && remaining === 0);
 }
 
 function getStudentClassSortRank(className) {
@@ -6297,7 +6544,8 @@ function createStudentQuickFilterMenuItem(optionElement) {
 
 function getStudentStatusLabel(student) {
     if (isStudentStuckOff(student)) return 'Stuck Off';
-    return isStudentTerminated(student) ? 'Terminated' : (student?.feesStatus || 'Pending');
+    const status = String(student?.feesStatus || '').trim();
+    return isStudentTerminated(student) ? 'Terminated' : (status || 'Pending');
 }
 
 function getStudentColumnSearchText(student, field) {
@@ -6490,9 +6738,10 @@ function renderStudents(term = '') {
         filtered.forEach(s => {
             const terminated = isStudentTerminated(s);
             const statusLabel = getStudentStatusLabel(s);
+            const normalizedFeeStatus = String(s.feesStatus || '').trim().toLowerCase();
             let statusClass = terminated
                 ? 'status-failed'
-                : (s.feesStatus === 'Paid' ? 'status-paid' : (s.feesStatus === 'Late' ? 'status-failed' : 'status-pending'));
+                : (['paid', 'zero fee student'].includes(normalizedFeeStatus) ? 'status-paid' : (normalizedFeeStatus === 'late' ? 'status-failed' : 'status-pending'));
             const encodedStudent = encodeURIComponent(JSON.stringify(s));
             const tr = document.createElement('tr');
             tr.innerHTML = `
@@ -6513,6 +6762,7 @@ function renderStudents(term = '') {
                         <option value="">Actions</option>
                         <option value="view">View</option>
                         <option value="print_admission">Print Admission Form</option>
+                        <option value="message">Message</option>
                         ${s.email ? '<option value="email">Send Email</option>' : ''}
                         ${canEditStudents ? '<option value="edit">Edit</option>' : ''}
                         ${canEditStudents ? (terminated ? '<option value="reactivate">Reactivate</option>' : '<option value="stuckoff">Stuck-Off</option>') : ''}
@@ -7134,7 +7384,7 @@ function printStudentAdmissionForm(student = {}) {
     const legacyPlaceholderNames = new Set(['harward school', 'harvard school']);
     const schoolName = rawSchoolName && !legacyPlaceholderNames.has(rawSchoolName.toLowerCase())
         ? rawSchoolName
-        : 'Apexiums School System';
+        : 'PESS JAND';
     const schoolLogo = new URL('images/logo.png', window.location.href).href;
     const printedAt = new Date().toLocaleString();
     const statusLabel = getStudentStatusLabel(student);
@@ -7426,6 +7676,7 @@ function editStudent(s) {
     if (document.getElementById('studentFamilyAddedTime')) document.getElementById('studentFamilyAddedTime').value = (s.familyAddedAt ? new Date(s.familyAddedAt).toISOString().slice(0, 16) : '');
     if (document.getElementById('monthlyFee')) document.getElementById('monthlyFee').value = s.monthlyFee || '0';
     if (document.getElementById('monthlyFee')) document.getElementById('monthlyFee').dataset.autoClassFee = s.monthlyFeeCustom === true || s.monthlyFeeCustom === 'true' ? '0' : '';
+    if (document.getElementById('zeroFeeReason')) document.getElementById('zeroFeeReason').value = s.zeroFeeReason || s.freeStudyReason || '';
     if (document.getElementById('remainingAmount')) document.getElementById('remainingAmount').value = s.remainingAmount || '0';
     if (document.getElementById('feeFrequency')) document.getElementById('feeFrequency').value = s.feeFrequency || 'Monthly';
     if (!(s.monthlyFeeCustom === true || s.monthlyFeeCustom === 'true')) applyClassFeeDefaultToStudentForm();
@@ -7977,6 +8228,7 @@ function renderTeachers(term = '') {
                             <option value="">Actions</option>
                             <option value="attendance">Attendance</option>
                             <option value="schedule">Schedule</option>
+                            <option value="message">Message</option>
                             ${t.email ? '<option value="email">Send Email</option>' : ''}
                             <option value="edit">Edit</option>
                             <option value="stuckoff">Stuck-Off</option>
@@ -8398,6 +8650,7 @@ function renderStaff(term = '') {
                 </td>
                 <td>PKR ${s.salary}</td>
                 <td>
+                    <button class="action-btn btn-view" onclick="openIndividualMessageFromEncoded('${encodedStaff}', 'Staff')"><i data-lucide="message-circle" width="14"></i> Message</button>
                     ${s.email ? `<button class="action-btn btn-view" onclick="sendStaffCustomEmailFromEncoded('${encodedStaff}')"><i data-lucide="mail" width="14"></i> Email</button>` : ''}
                     <button class="action-btn btn-edit" onclick='editStaff(${JSON.stringify(s)})'><i data-lucide="edit-2" width="14"></i> Edit</button>
                     <button class="action-btn btn-delete" onclick="deleteStaff('${s.id}')"><i data-lucide="trash-2" width="14"></i></button>
@@ -9253,7 +9506,7 @@ function buildSalaryRoster() {
         searchableText: `${member.fullName || ''} ${member.designation || ''} staff`.toLowerCase()
     }));
 
-    return [...teachers, ...staff].filter((entry) => entry.salary > 0);
+    return getGlobalCampusFilteredRecords([...teachers, ...staff]).filter((entry) => entry.salary > 0);
 }
 
 function getMonthlySalarySummary(monthKey) {

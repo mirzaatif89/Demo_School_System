@@ -1,6 +1,6 @@
 # Hostinger پر School CRM Deploy کریں - مکمل گائیڈ
 
-**Domain:** kidsrootsjand.com  
+**Domain:** apexiumsschool.com  
 **Host:** Hostinger
 
 ---
@@ -19,7 +19,7 @@
 
 ### cPanel میں جائیں:
 ```
-https://kidsrootsjand.com/cpanel
+https://apexiumsschool.com/cpanel
 ```
 
 ### MySQL Database بنائیں:
@@ -62,10 +62,10 @@ ADMIN_PASSWORD=admin123
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_SECURE=false
-SMTP_USER=softwaredemo17@gmail.com
+SMTP_USER=pessabubakar65@gmail.com
 SMTP_PASS=melqyptsoeabtnlk
-SMTP_FROM_EMAIL=softwaredemo17@gmail.com
-SMTP_FROM_NAME=Apexiums School
+SMTP_FROM_EMAIL=pessabubakar65@gmail.com
+SMTP_FROM_NAME=PESS JAND
 
 PENDING_FEE_REMINDER_ENABLED=true
 PENDING_FEE_REMINDER_TIME=09:00
@@ -111,7 +111,7 @@ public_html/
 
 ```bash
 # SSH میں لاگ ان کریں
-ssh your_username@kidsrootsjand.com
+ssh your_username@apexiumsschool.com
 
 # Project folder میں جائیں
 cd public_html
@@ -152,7 +152,7 @@ pm2 status
    - **Node Version:** 18+ (recommended)
    - **Application Root:** `/home/username/public_html`
    - **Application Startup File:** `app.js`
-   - **Application URL:** `https://kidsrootsjand.com`
+   - **Application URL:** `https://apexiumsschool.com`
 
 ---
 
@@ -161,7 +161,7 @@ pm2 status
 ### Hostinger میں Domain Setup:
 
 1. **Addon Domains** (اگر separate ہے):
-   - Domain: `kidsrootsjand.com`
+   - Domain: `apexiumsschool.com`
    - Directory: `public_html`
 
 2. **Routing/Proxy Setup** (اگر ضروری ہو):
@@ -211,7 +211,7 @@ mysqldump -u root -p school_system > school_system_backup.sql
 
 ```bash
 # Test کریں
-curl https://kidsrootsjand.com
+curl https://apexiumsschool.com
 
 # Logs دیکھیں
 pm2 logs school-crm
@@ -222,9 +222,9 @@ pm2 status
 
 ### Browser میں جائیں:
 ```
-https://kidsrootsjand.com
-https://kidsrootsjand.com/login
-https://kidsrootsjand.com/admin
+https://apexiumsschool.com
+https://apexiumsschool.com/login
+https://apexiumsschool.com/admin
 ```
 
 ---
@@ -302,4 +302,4 @@ pm2 restart school-crm
 7. SSL enable کریں
 ```
 
-**مبارک ہو! آپ کا School CRM kidsrootsjand.com پر live ہے! 🎉**
+**مبارک ہو! آپ کا School CRM apexiumsschool.com پر live ہے! 🎉**
