@@ -33,6 +33,8 @@ const JWT_SECRET = process.env.JWT_SECRET || 'eduCore_secret_key_2026';
 const PERMISSIONS_FILE = path.join(DATA_DIR, 'permissions.json');
 const DETAILED_PERMISSIONS_FILE = path.join(DATA_DIR, 'permissions-detailed.json');
 const DATE_SHEET_FILE = path.join(DATA_DIR, 'date_sheet.json');
+const MOBILE_STORE_DIR = path.join(DATA_DIR, 'mobile_api_store');
+const ONLINE_ADMISSIONS_FILE = path.join(MOBILE_STORE_DIR, 'online_admissions.json');
 const ADMIN_CREDENTIALS_FILE = path.join(DATA_DIR, 'admin_credentials.json');
 const PRINCIPAL_USERNAME = process.env.PRINCIPAL_USERNAME || 'principal@school.com';
 const PRINCIPAL_PASSWORD = process.env.PRINCIPAL_PASSWORD || 'Principal123';
@@ -135,6 +137,7 @@ const MODULE_KEYS = [
     'notifications',
     'messages',
     'special_notices',
+    'online_admissions',
     'exams',
     'revenue',
     'settings',
@@ -161,6 +164,7 @@ const ALLOWED_HOME_PAGES = new Set([
     'notifications.html',
     'messages.html',
     'special_notices.html',
+    'online_admissions.html',
     'exams.html',
     'revenue.html',
     'settings.html',
@@ -224,6 +228,7 @@ const defaultPermissions = {
                 notifications: 'manage',
                 messages: 'manage',
                 special_notices: 'manage',
+                online_admissions: 'manage',
                 exams: 'manage',
                 revenue: 'view',
                 settings: 'view',
@@ -247,6 +252,7 @@ const defaultPermissions = {
                 exams: 'view',
                 notifications: 'view',
                 messages: 'view',
+                online_admissions: 'none',
                 aboutme: 'view'
             })
         }
@@ -919,6 +925,46 @@ function writeDateSheet(data) {
     return normalized;
 }
 
+function readOnlineAdmissions() {
+    try {
+        if (!fs.existsSync(ONLINE_ADMISSIONS_FILE)) return [];
+        const parsed = JSON.parse(fs.readFileSync(ONLINE_ADMISSIONS_FILE, 'utf8'));
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (_error) {
+        return [];
+    }
+}
+
+function writeOnlineAdmissions(records = []) {
+    fs.mkdirSync(MOBILE_STORE_DIR, { recursive: true });
+    const normalized = Array.isArray(records) ? records : [];
+    fs.writeFileSync(ONLINE_ADMISSIONS_FILE, JSON.stringify(normalized, null, 2), 'utf8');
+    return normalized;
+}
+
+function normalizeOnlineAdmission(payload = {}, existing = {}) {
+    const raw = payload && typeof payload === 'object' ? payload : {};
+    const now = new Date().toISOString();
+    return {
+        ...existing,
+        ...raw,
+        id: String(raw.id || existing.id || `ADM-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
+        studentName: String(raw.studentName ?? existing.studentName ?? '').trim(),
+        parentName: String(raw.parentName ?? existing.parentName ?? '').trim(),
+        className: String(raw.className ?? existing.className ?? '').trim(),
+        phone: String(raw.phone ?? existing.phone ?? '').trim(),
+        email: String(raw.email ?? existing.email ?? '').trim(),
+        campus: String(raw.campus ?? existing.campus ?? '').trim(),
+        studentAge: String(raw.studentAge ?? existing.studentAge ?? '').trim(),
+        previousSchool: String(raw.previousSchool ?? existing.previousSchool ?? '').trim(),
+        address: String(raw.address ?? existing.address ?? '').trim(),
+        message: String(raw.message ?? existing.message ?? '').trim(),
+        status: String(raw.status || existing.status || 'New').trim() || 'New',
+        createdAt: existing.createdAt || raw.createdAt || now,
+        updatedAt: now
+    };
+}
+
 app.get('/api/date-sheet', (req, res) => {
     res.json({ success: true, dateSheet: readDateSheet() });
 });
@@ -931,6 +977,51 @@ app.post('/api/date-sheet', (req, res) => {
     } catch (error) {
         res.status(500).json({ success: false, message: 'Date sheet could not be executed.' });
     }
+});
+
+app.get('/api/online-admissions', (req, res) => {
+    res.json({ success: true, applications: readOnlineAdmissions() });
+});
+
+app.post('/api/online-admissions', (req, res) => {
+    try {
+        const payload = req.body || {};
+        const required = ['studentName', 'parentName', 'className', 'phone'];
+        const missing = required.find((key) => !String(payload[key] || '').trim());
+        if (missing) {
+            return res.status(400).json({ success: false, message: 'Student name, parent name, class, and phone are required.' });
+        }
+
+        const applications = readOnlineAdmissions();
+        const application = normalizeOnlineAdmission(payload);
+        applications.unshift(application);
+        const saved = writeOnlineAdmissions(applications);
+        if (io) io.emit('online_admissions_update', saved);
+        return res.json({ success: true, application, applications: saved });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message || 'Application could not be submitted.' });
+    }
+});
+
+app.post('/api/online-admissions/:id', (req, res) => {
+    try {
+        const applications = readOnlineAdmissions();
+        const index = applications.findIndex((item) => String(item.id) === String(req.params.id));
+        if (index < 0) return res.status(404).json({ success: false, message: 'Application not found.' });
+
+        applications[index] = normalizeOnlineAdmission(req.body || {}, applications[index]);
+        const saved = writeOnlineAdmissions(applications);
+        if (io) io.emit('online_admissions_update', saved);
+        return res.json({ success: true, application: applications[index], applications: saved });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message || 'Application could not be updated.' });
+    }
+});
+
+app.delete('/api/online-admissions/:id', (req, res) => {
+    const applications = writeOnlineAdmissions(readOnlineAdmissions().filter((item) => String(item.id) !== String(req.params.id)));
+    if (io) io.emit('online_admissions_update', applications);
+    res.json({ success: true, deleted: true, applications });
 });
 
 app.post('/api/login', async (req, res) => {
@@ -1460,6 +1551,87 @@ app.delete('/api/special-notices/:id', async (req, res) => {
     }
 });
 
+function normalizeBannerPlacement(value) {
+    return String(value || '').trim().toLowerCase() === 'ad' ? 'ad' : 'banner';
+}
+
+function formatBanner(record) {
+    const raw = record && typeof record.toJSON === 'function' ? record.toJSON() : record;
+    return {
+        ...raw,
+        placement: normalizeBannerPlacement(raw?.placement),
+        displayOrder: Number(raw?.displayOrder || 0),
+        isActive: raw?.isActive !== false
+    };
+}
+
+app.get('/api/banners', async (req, res) => {
+    if (!sequelize) return res.status(503).json({ success: false, message: 'Database offline' });
+
+    try {
+        const placement = String(req.query?.placement || '').trim().toLowerCase();
+        const where = ['banner', 'ad'].includes(placement) ? { placement } : undefined;
+        const records = await sequelize.models.Banner.findAll({
+            where,
+            order: [['displayOrder', 'ASC'], ['updatedAt', 'DESC']]
+        });
+        res.json({ success: true, banners: records.map(formatBanner) });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+app.post('/api/banners', async (req, res) => {
+    if (!sequelize) return res.status(503).json({ success: false, message: 'Database offline' });
+
+    try {
+        const payload = req.body || {};
+        const title = String(payload.title || '').trim();
+        const imageUrl = String(payload.imageUrl || '').trim();
+
+        if (!title || !imageUrl) {
+            return res.status(400).json({ success: false, message: 'Title and image are required.' });
+        }
+
+        const banner = {
+            id: payload.id || `BANNER-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            title,
+            subtitle: String(payload.subtitle || '').trim(),
+            imageUrl,
+            linkUrl: String(payload.linkUrl || '').trim(),
+            placement: normalizeBannerPlacement(payload.placement),
+            displayOrder: Number(payload.displayOrder || 0),
+            isActive: payload.isActive !== false
+        };
+
+        await sequelize.models.Banner.upsert(banner);
+        const records = await sequelize.models.Banner.findAll({
+            order: [['displayOrder', 'ASC'], ['updatedAt', 'DESC']]
+        });
+        const banners = records.map(formatBanner);
+        if (io) io.emit('banners_update', banners);
+        res.json({ success: true, banner: formatBanner(banner), banners });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+app.delete('/api/banners/:id', async (req, res) => {
+    if (!sequelize) return res.status(503).json({ success: false, message: 'Database offline' });
+
+    try {
+        const deletedCount = await sequelize.models.Banner.destroy({ where: { id: req.params.id } });
+        const records = await sequelize.models.Banner.findAll({
+            order: [['displayOrder', 'ASC'], ['updatedAt', 'DESC']]
+        });
+        const banners = records.map(formatBanner);
+        if (io) io.emit('banners_update', banners);
+        res.json({ success: true, deleted: deletedCount > 0, banners });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
 app.post('/api/reset-data', authenticateToken, async (req, res) => {
     if (req.user.role !== 'Admin') {
         return res.status(403).json({ success: false, message: 'Admin access required.' });
@@ -1976,6 +2148,7 @@ app.post('/api/fees/manual-payment', async (req, res) => {
             session,
             amount,
             fullAmount,
+            paymentDate,
             challanNumber
         } = req.body || {};
 
@@ -1992,8 +2165,12 @@ app.post('/api/fees/manual-payment', async (req, res) => {
             return res.status(404).json({ success: false, message: 'Student not found.' });
         }
 
-        const paymentAmount = Number(amount || 0);
-        const safeFullAmount = Number(fullAmount || amount || student.monthlyFee || 0);
+        const isZeroFeeStudent = student?.freeStudy === true ||
+            student?.freeStudy === 'true' ||
+            String(student?.zeroFeeReason || student?.freeStudyReason || '').trim() ||
+            String(student?.feesStatus || '').trim().toLowerCase() === 'zero fee student';
+        const paymentAmount = isZeroFeeStudent ? 0 : Number(amount || 0);
+        const safeFullAmount = isZeroFeeStudent ? 0 : Number(fullAmount || amount || student.monthlyFee || 0);
         const remainingDue = Math.max(safeFullAmount - paymentAmount, 0);
         const resolvedStatus = remainingDue > 0 ? 'Partial' : 'Paid';
 
@@ -2019,7 +2196,13 @@ app.post('/api/fees/manual-payment', async (req, res) => {
 
         const existingPayment = await FeePayment.findByPk(safeChallanNumber);
         const alreadyRecorded = existingPayment && ['Paid', 'Partial'].includes(String(existingPayment.status || ''));
-        const paidAt = existingPayment?.paidAt || new Date();
+        const parsePaymentDate = (value) => {
+            const match = String(value || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (!match) return null;
+            const parsed = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+            return Number.isNaN(parsed.getTime()) ? null : parsed;
+        };
+        const paidAt = existingPayment?.paidAt || parsePaymentDate(paymentDate) || new Date();
         const paymentDateLabel = paidAt.toLocaleDateString('en-GB');
 
         const paymentRow = {
@@ -2242,8 +2425,12 @@ app.get('/api/fees/pay/:token', async (req, res) => {
         const paidAt = existingPayment?.paidAt || new Date();
         const paymentDateLabel = paidAt.toLocaleDateString('en-GB');
 
-        const paymentAmount = Number(payload.amount || student.monthlyFee || 0);
-        const fullAmount = Number(payload.fullAmount || payload.amount || student.monthlyFee || 0);
+        const isZeroFeeStudent = student?.freeStudy === true ||
+            student?.freeStudy === 'true' ||
+            String(student?.zeroFeeReason || student?.freeStudyReason || '').trim() ||
+            String(student?.feesStatus || '').trim().toLowerCase() === 'zero fee student';
+        const paymentAmount = isZeroFeeStudent ? 0 : Number(payload.amount || student.monthlyFee || 0);
+        const fullAmount = isZeroFeeStudent ? 0 : Number(payload.fullAmount || payload.amount || student.monthlyFee || 0);
         const remainingDue = Math.max(fullAmount - paymentAmount, 0);
         const resolvedStatus = remainingDue > 0 ? 'Partial' : 'Paid';
 
@@ -2864,6 +3051,7 @@ function defineStudentModel(db) {
         campusName: DataTypes.STRING,
         gender: DataTypes.STRING,
         parentPhone: DataTypes.STRING,
+        nonDigital: DataTypes.BOOLEAN,
         email: { type: DataTypes.STRING, unique: true, allowNull: true },
         rollNo: DataTypes.STRING,
         formB: DataTypes.STRING,
@@ -3018,6 +3206,19 @@ function defineSpecialNoticeModel(db) {
         status: { type: DataTypes.STRING, defaultValue: 'draft' },
         executedAt: { type: DataTypes.DATE, allowNull: true },
         createdAtLabel: DataTypes.STRING
+    });
+}
+
+function defineBannerModel(db) {
+    return db.define('Banner', {
+        id: { type: DataTypes.STRING, primaryKey: true },
+        title: { type: DataTypes.STRING, allowNull: false },
+        subtitle: { type: DataTypes.STRING, allowNull: true },
+        imageUrl: { type: DataTypes.TEXT('long'), allowNull: false },
+        linkUrl: { type: DataTypes.STRING, allowNull: true },
+        placement: { type: DataTypes.STRING, defaultValue: 'banner' },
+        displayOrder: { type: DataTypes.INTEGER, defaultValue: 0 },
+        isActive: { type: DataTypes.BOOLEAN, defaultValue: true }
     });
 }
 
@@ -3286,6 +3487,7 @@ async function ensureLegacySchema() {
         campusName: { type: DataTypes.STRING, allowNull: true },
         gender: { type: DataTypes.STRING, allowNull: true },
         parentPhone: { type: DataTypes.STRING, allowNull: true },
+        nonDigital: { type: DataTypes.BOOLEAN, allowNull: true },
         email: { type: DataTypes.STRING, allowNull: true },
         rollNo: { type: DataTypes.STRING, allowNull: true },
         formB: { type: DataTypes.STRING, allowNull: true },
@@ -3379,6 +3581,14 @@ async function ensureLegacySchema() {
         senderName: { type: DataTypes.STRING, allowNull: true },
         createdAtLabel: { type: DataTypes.STRING, allowNull: true }
     });
+
+    await ensureTableColumns('Banners', {
+        subtitle: { type: DataTypes.STRING, allowNull: true },
+        linkUrl: { type: DataTypes.STRING, allowNull: true },
+        placement: { type: DataTypes.STRING, allowNull: true, defaultValue: 'banner' },
+        displayOrder: { type: DataTypes.INTEGER, allowNull: true, defaultValue: 0 },
+        isActive: { type: DataTypes.BOOLEAN, allowNull: true, defaultValue: true }
+    });
 }
 
 async function startServer() {
@@ -3413,6 +3623,7 @@ async function startServer() {
         defineStudentAttendanceModel(sequelize);
         defineTeacherAttendanceModel(sequelize);
         defineSpecialNoticeModel(sequelize);
+        defineBannerModel(sequelize);
         defineMessageModel(sequelize);
 
         // Avoid Sequelize's repeated ALTER-based index churn on MySQL.

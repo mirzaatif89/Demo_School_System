@@ -1298,7 +1298,7 @@ function getBrandingSettings() {
         schoolTitle: 'PESS JAND',
         session: '',
         phone: '0340-5983088,03015060130,0572622364',
-        email: 'pessabubakar65@gmail.com',
+        email: 'pessjand@gmail.com',
         address: '',
         schoolAddress: '',
         logoDataUrl: ''
@@ -3074,7 +3074,7 @@ function ensureBannersNav() {
     const navLinks = document.querySelector('.nav-links');
     const loggedInUser = getLoggedInUser();
     if (!navLinks || !loggedInUser) return;
-    if (navLinks.querySelector('[data-banners-link]')) return;
+    if (navLinks.querySelector('[data-banners-link]') && navLinks.querySelector('[data-ads-link]')) return;
 
     const permissions = (() => {
         try {
@@ -3098,10 +3098,18 @@ function ensureBannersNav() {
     bannersLink.dataset.bannersLink = 'true';
     bannersLink.innerHTML = '<i data-lucide="image"></i><span>Banners</span>';
 
+    const adsLink = document.createElement('a');
+    adsLink.href = toRoutePath('ads.html');
+    adsLink.className = `nav-item${currentPage === 'ads.html' ? ' active' : ''}`;
+    adsLink.dataset.adsLink = 'true';
+    adsLink.innerHTML = '<i data-lucide="ad"></i><span>Ads</span>';
+
     if (studentsLink) {
         studentsLink.insertAdjacentElement('afterend', bannersLink);
+        bannersLink.insertAdjacentElement('afterend', adsLink);
     } else {
         navLinks.appendChild(bannersLink);
+        navLinks.appendChild(adsLink);
     }
 
     if (window.lucide) window.lucide.createIcons();
@@ -3216,6 +3224,7 @@ function ensureAdminSidebarCompleteness() {
     const completeLinks = [
         { page: 'dashboard.html', label: 'Dashboard', icon: 'layout-dashboard' },
         { page: 'banners.html', label: 'Banners', icon: 'image' },
+        { page: 'ads.html', label: 'Ads', icon: 'ad' },
         { page: 'classes.html', label: 'Classes', icon: 'school' },
         { page: 'students.html', label: 'Students', icon: 'users' },
         { page: 'student_scheduling.html', label: 'Students Scheduling', icon: 'calendar-clock' },
@@ -3248,18 +3257,24 @@ function ensureAdminSidebarCompleteness() {
         { page: 'aboutme.html', label: 'About', icon: 'info' }
     ];
 
+    const navLinkKey = (href = '') => {
+        const raw = String(href || '');
+        const hash = raw.includes('#') ? `#${raw.split('#').pop()}` : '';
+        return `${normalizeClientPageName(raw)}${hash}`;
+    };
+    const itemKey = (item) => `${item.page}${item.hash || ''}`;
     const existingPages = () => new Set(Array.from(navLinks.querySelectorAll('a[href]'))
-        .map((link) => normalizeClientPageName(link.getAttribute('href') || '')));
+        .map((link) => navLinkKey(link.getAttribute('href') || '')));
 
     const logoutLink = Array.from(navLinks.querySelectorAll('a[href="#"]'))
         .find((link) => /logout/i.test(link.textContent || ''));
     let existing = existingPages();
 
     completeLinks.forEach((item) => {
-        if (existing.has(item.page)) return;
+        if (existing.has(itemKey(item))) return;
         const link = document.createElement('a');
-        link.href = toRoutePath(item.page);
-        link.className = `nav-item${currentPage === item.page ? ' active' : ''}`;
+        link.href = `${toRoutePath(item.page)}${item.hash || ''}`;
+        link.className = `nav-item${currentPage === item.page && (!item.hash || window.location.hash === item.hash) ? ' active' : ''}`;
         link.dataset.adminCompleteLink = 'true';
         link.innerHTML = `<i data-lucide="${item.icon}"></i><span>${item.label}</span>`;
         if (logoutLink) {
@@ -3315,6 +3330,7 @@ function renderAdminSidebarSequence() {
     const navItems = [
         { type: 'link', page: 'dashboard.html', label: 'Dashboard', icon: 'layout-dashboard' },
         { type: 'link', page: 'banners.html', label: 'Banners', icon: 'image' },
+        { type: 'link', page: 'ads.html', label: 'Ads', icon: 'ad' },
         { type: 'link', page: 'classes.html', label: 'Classes', icon: 'school' },
         { type: 'link', page: 'students.html', label: 'Students', icon: 'users' },
         { type: 'link', page: 'student_scheduling.html', label: 'Students Scheduling', icon: 'calendar-clock' },
@@ -4458,7 +4474,16 @@ function getCurrentDashboardFeeMonthKey() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
-function getDashboardPaymentMonthKeys(value = '') {
+function getDashboardPaymentFallbackYear(fallbackDate = '') {
+    const raw = String(fallbackDate || '').trim();
+    const slashDate = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+    if (slashDate) return Number(slashDate[3]);
+    const parsed = new Date(raw);
+    if (!Number.isNaN(parsed.getTime())) return parsed.getFullYear();
+    return new Date().getFullYear();
+}
+
+function getDashboardPaymentMonthKeys(value = '', fallbackDate = '') {
     const raw = String(value || '').trim();
     if (!raw) return [];
 
@@ -4476,11 +4501,27 @@ function getDashboardPaymentMonthKeys(value = '') {
     ];
     const lowered = raw.toLowerCase();
     const yearMatch = lowered.match(/\b(20\d{2})\b/);
-    const fallbackYear = yearMatch ? Number(yearMatch[1]) : new Date().getFullYear();
+    const fallbackYear = yearMatch ? Number(yearMatch[1]) : getDashboardPaymentFallbackYear(fallbackDate);
     return monthNames
         .map((month, index) => ({ month, index }))
         .filter(({ month }) => lowered.includes(month.toLowerCase()) || lowered.includes(month.slice(0, 3).toLowerCase()))
         .map(({ index }) => `${fallbackYear}-${String(index + 1).padStart(2, '0')}`);
+}
+
+function isDashboardFeeCollectionPayment(payment = {}) {
+    const status = String(payment?.status || '').toLowerCase();
+    const source = String(payment?.paymentSource || payment?.paymentMode || '').toLowerCase();
+    return ['paid', 'partial'].includes(status) && !['fine', 'fine correction', 'correction'].includes(source);
+}
+
+function getDashboardPaymentAmountForMonth(payment = {}, monthKey = getCurrentDashboardFeeMonthKey()) {
+    if (!isDashboardFeeCollectionPayment(payment)) return 0;
+    const amount = Math.max(Number(payment?.amount || 0), 0);
+    if (!(amount > 0)) return 0;
+    const monthKeys = getDashboardPaymentMonthKeys(payment?.feeMonth || '', payment?.paidAt || payment?.paymentDateLabel || payment?.createdAt);
+    if (!monthKeys.length) return 0;
+    if (!monthKeys.includes(monthKey)) return 0;
+    return amount / Math.max(monthKeys.length, 1);
 }
 
 function getDashboardFeeStatusRevenue(students = []) {
@@ -4549,18 +4590,15 @@ async function getDashboardBackendFeeStatusRevenue(students = []) {
         const payments = Array.isArray(result?.payments) ? result.payments : [];
 
         payments.forEach((payment) => {
-            const status = String(payment?.status || '').toLowerCase();
-            if (!['paid', 'partial'].includes(status)) return;
+            if (!isDashboardFeeCollectionPayment(payment)) return;
             const studentId = String(payment?.studentId || '');
             const matchedStudent = studentMap.get(studentId) ||
                 rollMap.get(String(payment?.rollNo || '').trim().toLowerCase()) ||
                 nameRollMap.get(`${String(payment?.studentName || '').trim().toLowerCase()}|${String(payment?.rollNo || '').trim().toLowerCase()}|${String(payment?.classGrade || '').trim().toLowerCase()}`);
             if (!matchedStudent) return;
-            const monthKeys = getDashboardPaymentMonthKeys(payment?.feeMonth || '');
-            if (monthKeys.length && !monthKeys.includes(currentMonthKey)) return;
-            const amount = Math.max(Number(payment?.amount || 0), 0);
+            const amount = getDashboardPaymentAmountForMonth(payment, currentMonthKey);
             if (!(amount > 0)) return;
-            summary.total += amount / Math.max(monthKeys.length || 1, 1);
+            summary.total += amount;
             paidStudentIds.add(String(matchedStudent.id || studentId || `${payment?.studentName || ''}|${payment?.rollNo || ''}`));
         });
 
@@ -5025,6 +5063,8 @@ function toggleStudentForm(editMode = false) {
             if (admissionDateField) admissionDateField.value = new Date().toISOString().split('T')[0];
             if (document.getElementById('feeFrequency')) document.getElementById('feeFrequency').value = 'Monthly';
             if (document.getElementById('remainingAmount')) document.getElementById('remainingAmount').value = '0';
+            if (document.getElementById('studentNonDigital')) document.getElementById('studentNonDigital').checked = false;
+            syncStudentNonDigitalPhoneRequirement();
             populateStudentFamilyOptions();
             setStudentPhotoPreview('');
             title.innerText = 'Add New Student';
@@ -5044,10 +5084,13 @@ async function validateStudentRequiredFields() {
         ['studentDob', 'Date of Birth'],
         ['classGrade', 'Class'],
         ['campusName', 'Campus'],
-        ['parentPhone', 'Contact Phone'],
         ['gender', 'Gender'],
         ['rollNo', 'Roll No']
     ];
+
+    if (!document.getElementById('studentNonDigital')?.checked) {
+        requiredFields.splice(5, 0, ['parentPhone', 'Contact Phone']);
+    }
 
     const missingField = requiredFields.find(([fieldId]) => {
         const field = document.getElementById(fieldId);
@@ -5063,6 +5106,22 @@ async function validateStudentRequiredFields() {
     }
 
     return true;
+}
+
+function isStudentNonDigital(student = {}) {
+    const rawValue = student?.nonDigital ?? student?.isNonDigital ?? student?.noMobile;
+    const normalized = String(rawValue ?? '').trim().toLowerCase();
+    return rawValue === true || normalized === 'true' || normalized === '1' || normalized === 'yes';
+}
+
+function syncStudentNonDigitalPhoneRequirement() {
+    const checkbox = document.getElementById('studentNonDigital');
+    const phoneField = document.getElementById('parentPhone');
+    if (!checkbox || !phoneField) return;
+
+    const nonDigital = checkbox.checked;
+    phoneField.required = !nonDigital;
+    phoneField.placeholder = nonDigital ? 'No mobile available' : '';
 }
 
 function generateStudentCode() {
@@ -5241,7 +5300,15 @@ function applyClassFeeDefaultToStudentForm(force = false) {
     const classSelect = document.getElementById('classGrade');
     const monthlyFeeInput = document.getElementById('monthlyFee');
     const feeFrequencyInput = document.getElementById('feeFrequency');
+    const zeroFeeReasonInput = document.getElementById('zeroFeeReason');
     if (!classSelect || !monthlyFeeInput) return;
+    if (String(zeroFeeReasonInput?.value || '').trim()) {
+        monthlyFeeInput.value = '0';
+        monthlyFeeInput.dataset.autoClassFee = '0';
+        const remainingAmountInput = document.getElementById('remainingAmount');
+        if (remainingAmountInput) remainingAmountInput.value = '0';
+        return;
+    }
 
     const feeDefault = getClassFeeDefault(classSelect.value);
     if (!feeDefault) {
@@ -5609,6 +5676,7 @@ async function handleStudentFormSubmit(e) {
     const parentPhone = document.getElementById('parentPhone').value.trim();
     let usernameInput = document.getElementById('username').value.trim();
     let studentPasswordInput = document.getElementById('studentPassword').value;
+    const nonDigital = document.getElementById('studentNonDigital')?.checked === true;
     const monthlyFeeInput = document.getElementById('monthlyFee') ? document.getElementById('monthlyFee').value : '';
     const remainingAmountInput = document.getElementById('remainingAmount') ? document.getElementById('remainingAmount').value : '';
     const zeroFeeReasonInput = document.getElementById('zeroFeeReason') ? document.getElementById('zeroFeeReason').value.trim() : '';
@@ -5623,10 +5691,13 @@ async function handleStudentFormSubmit(e) {
         ['studentDob', 'Date of Birth is required.'],
         ['classGrade', 'Class is required.'],
         ['campusName', 'Campus Name is required.'],
-        ['parentPhone', 'Contact Phone is required.'],
         ['gender', 'Gender is required.'],
         ['rollNo', 'Roll No is required.']
     ];
+
+    if (!nonDigital) {
+        requiredFields.splice(5, 0, ['parentPhone', 'Contact Phone is required.']);
+    }
 
     for (const [fieldId, message] of requiredFields) {
         const field = document.getElementById(fieldId);
@@ -5723,6 +5794,7 @@ async function handleStudentFormSubmit(e) {
         classGrade: selectedClassGrade,
         campusName: document.getElementById('campusName').value,
         parentPhone,
+        nonDigital,
         address: studentAddress,
         guardianName,
         guardianContact,
@@ -5851,6 +5923,8 @@ function bindStudentFamilyAutoFill() {
 }
 
 bindStudentFamilyAutoFill();
+
+document.getElementById('studentNonDigital')?.addEventListener('change', syncStudentNonDigitalPhoneRequirement);
 
 function decodeRowPayload(encodedPayload) {
     try {
@@ -6133,6 +6207,7 @@ function viewStudent(student) {
         viewStudentGender: student.gender || '-',
         viewStudentStatus: isStudentTerminated(student) ? 'Terminated' : (student.feesStatus || 'Pending'),
         viewStudentPhone: student.parentPhone || '-',
+        viewStudentDigitalAccess: isStudentNonDigital(student) ? 'Non-Digital / No Mobile' : 'Digital / Mobile Available',
         viewStudentAddress: student.address || '-',
         viewStudentGuardianName: student.guardianName || '-',
         viewStudentGuardianContact: student.guardianContact || '-',
@@ -6287,6 +6362,7 @@ function parseStudentQuickFilterValues(values) {
     let below5 = false;
     let polioList = false;
     let zeroFee = false;
+    let nonDigital = false;
 
     normalizedValues.forEach((value) => {
         if (value.startsWith('gender:')) {
@@ -6318,6 +6394,11 @@ function parseStudentQuickFilterValues(values) {
             return;
         }
 
+        if (value === 'non-digital') {
+            nonDigital = true;
+            return;
+        }
+
         if (value === 'list:polio') {
             polioList = true;
             return;
@@ -6335,7 +6416,8 @@ function parseStudentQuickFilterValues(values) {
         feeStatuses,
         polioList,
         below5,
-        zeroFee
+        zeroFee,
+        nonDigital
     };
 }
 
@@ -6693,6 +6775,7 @@ function renderStudents(term = '') {
     const feeStatusSet = new Set(parsedFilters.feeStatuses.map((status) => String(status || '').toLowerCase()));
     const requireBelow5 = parsedFilters.below5;
     const requireZeroFee = parsedFilters.zeroFee;
+    const requireNonDigital = parsedFilters.nonDigital;
 
     if (loggedInUser?.role === 'Branch' && loggedInUser.campusName) {
         campusSet = new Set([String(loggedInUser.campusName).toLowerCase()]);
@@ -6718,6 +6801,7 @@ function renderStudents(term = '') {
         (campusSet.size === 0 || campusSet.has(String(s.campusName || '').toLowerCase())) &&
         (feeStatusSet.size === 0 || feeStatusSet.has(String(getStudentStatusLabel(s) || '').toLowerCase())) &&
         (!requireZeroFee || isStudentZeroFee(s)) &&
+        (!requireNonDigital || isStudentNonDigital(s)) &&
         !isStudentTerminated(s)
     );
 
@@ -6738,6 +6822,9 @@ function renderStudents(term = '') {
         filtered.forEach(s => {
             const terminated = isStudentTerminated(s);
             const statusLabel = getStudentStatusLabel(s);
+            const digitalBadge = isStudentNonDigital(s)
+                ? '<span class="status-badge status-pending" title="No mobile available">Non-Digital</span>'
+                : '';
             const normalizedFeeStatus = String(s.feesStatus || '').trim().toLowerCase();
             let statusClass = terminated
                 ? 'status-failed'
@@ -6749,7 +6836,7 @@ function renderStudents(term = '') {
                 <td><b>${s.rollNo}</b></td>
                 <td><div class="student-name-cell">
                     <div class="student-avatar">${buildStudentAvatarMarkup(s)}</div>
-                    <div class="student-name-text">${s.fullName}</div>
+                    <div class="student-name-text">${s.fullName}${digitalBadge}</div>
                 </div></td>
                 <td class="cell-compact">${s.fatherName || '-'}</td>
                 <td>${formatDateForDisplay(s.dob)}</td>
@@ -7183,6 +7270,7 @@ function printStudentsList() {
     const feeStatusSet = new Set(parsedFilters.feeStatuses.map((status) => String(status || '').toLowerCase()));
     const requireBelow5 = parsedFilters.below5;
     const requireZeroFee = parsedFilters.zeroFee;
+    const requireNonDigital = parsedFilters.nonDigital;
 
     if (loggedInUser?.role === 'Branch' && loggedInUser.campusName) {
         campusSet = new Set([String(loggedInUser.campusName).toLowerCase()]);
@@ -7210,6 +7298,7 @@ function printStudentsList() {
             (campusSet.size === 0 || campusSet.has(String(s.campusName || '').toLowerCase())) &&
             (feeStatusSet.size === 0 || feeStatusSet.has(String(getStudentStatusLabel(s) || '').toLowerCase())) &&
             (!requireZeroFee || isStudentZeroFee(s)) &&
+            (!requireNonDigital || isStudentNonDigital(s)) &&
             !isStudentTerminated(s)
         )
         .sort((a, b) => {
@@ -7225,7 +7314,9 @@ function printStudentsList() {
     const settings = getData(STORAGE_KEY_SETTINGS) || {};
     const schoolName = settings.schoolName || 'Student List';
     const printedAt = new Date().toLocaleString();
-    const modeLabel = printMode === 'polio' ? 'Polio List' : (printMode === 'outer' ? 'Outer Student List' : 'School Student List');
+    const modeLabel = parsedFilters.nonDigital
+        ? 'Non-Digital Students List'
+        : (printMode === 'polio' ? 'Polio List' : (printMode === 'outer' ? 'Outer Student List' : 'School Student List'));
 
     const formatDateSafe = (value) => {
         try {
@@ -7556,7 +7647,7 @@ function populateStudentQuickFilterOptions() {
     const campuses = Array.from(campusMap.values()).sort((a, b) => a.localeCompare(b));
     const classes = Array.from(classMap.values()).sort(compareStudentClassNames);
     const signature = [
-        'filters:v2',
+        'filters:v3',
         `campuses:${campuses.map((name) => String(name || '').toLowerCase()).join('|')}`,
         `classes:${classes.map((name) => String(name || '').toLowerCase()).join('|')}`
     ].join('||');
@@ -7570,6 +7661,7 @@ function populateStudentQuickFilterOptions() {
             <option value="gender:Female">Female Students</option>
             <option value="gender:Other">Other Gender</option>
             <option value="age:below5">Below 5 Years</option>
+            <option value="non-digital">Non-Digital / No Mobile</option>
             <option value="fee:Paid">Fee Paid</option>
             <option value="zero-fee">Zero Fee Students</option>
             <option value="fee:Pending">Fee Pending</option>
@@ -7662,6 +7754,8 @@ function editStudent(s) {
     document.getElementById('classGrade').value = s.classGrade;
     document.getElementById('campusName').value = s.campusName || '';
     document.getElementById('parentPhone').value = s.parentPhone;
+    if (document.getElementById('studentNonDigital')) document.getElementById('studentNonDigital').checked = isStudentNonDigital(s);
+    syncStudentNonDigitalPhoneRequirement();
     if (document.getElementById('studentAddress')) document.getElementById('studentAddress').value = s.address || '';
     if (document.getElementById('guardianName')) document.getElementById('guardianName').value = s.guardianName || '';
     if (document.getElementById('guardianContact')) document.getElementById('guardianContact').value = s.guardianContact || '';
@@ -7677,7 +7771,9 @@ function editStudent(s) {
     if (document.getElementById('monthlyFee')) document.getElementById('monthlyFee').value = s.monthlyFee || '0';
     if (document.getElementById('monthlyFee')) document.getElementById('monthlyFee').dataset.autoClassFee = s.monthlyFeeCustom === true || s.monthlyFeeCustom === 'true' ? '0' : '';
     if (document.getElementById('zeroFeeReason')) document.getElementById('zeroFeeReason').value = s.zeroFeeReason || s.freeStudyReason || '';
-    if (document.getElementById('remainingAmount')) document.getElementById('remainingAmount').value = s.remainingAmount || '0';
+    if (document.getElementById('remainingAmount')) {
+        document.getElementById('remainingAmount').value = isFreeStudyStudent(s) ? '0' : (s.remainingAmount || '0');
+    }
     if (document.getElementById('feeFrequency')) document.getElementById('feeFrequency').value = s.feeFrequency || 'Monthly';
     if (!(s.monthlyFeeCustom === true || s.monthlyFeeCustom === 'true')) applyClassFeeDefaultToStudentForm();
     if (document.getElementById('username')) document.getElementById('username').value = s.username || '';
@@ -8228,7 +8324,7 @@ function renderTeachers(term = '') {
                             <option value="">Actions</option>
                             <option value="attendance">Attendance</option>
                             <option value="schedule">Schedule</option>
-                            <option value="message">Message</option>
+                            <option value="message">Send Message</option>
                             ${t.email ? '<option value="email">Send Email</option>' : ''}
                             <option value="edit">Edit</option>
                             <option value="stuckoff">Stuck-Off</option>
